@@ -35,9 +35,13 @@ class DotBitmap {
   }
 }
 
-/// Renders [text] with the platform font at a height of [rows] pixels and
-/// thresholds the result into dots. Any script the system font supports
-/// (Latin, Hangul, Kanji, emoji, ...) therefore works out of the box.
+/// Renders [text] with the platform font and thresholds the result into a
+/// bitmap [rows] dots tall. Any script the font supports (Latin, Hangul,
+/// Kanji, emoji, ...) therefore works out of the box.
+///
+/// Glyph metrics differ widely between fonts, so the text is measured by its
+/// actual ink: vertically centered on what is drawn, and shrunk if it would
+/// not fit.
 Future<DotBitmap> rasterizeText(
   String text, {
   required int rows,
@@ -45,13 +49,50 @@ Future<DotBitmap> rasterizeText(
 }) async {
   if (text.trim().isEmpty) return DotBitmap.empty(rows);
 
-  final fontSize = rows * 0.9;
+  var fontSize = rows * 0.9;
+  var r = await _render(text, fontSize, bold);
+  for (var attempt = 0; attempt < 3 && r.inkHeight > rows; attempt++) {
+    fontSize *= rows / r.inkHeight;
+    r = await _render(text, fontSize, bold);
+  }
+  if (r.inkHeight == 0) return DotBitmap.empty(rows);
+
+  final top = r.inkTop - ((rows - r.inkHeight) / 2).floor();
+  final bits = Uint8List(r.width * rows);
+  for (var y = 0; y < rows; y++) {
+    final sy = top + y;
+    if (sy < 0 || sy >= r.height) continue;
+    bits.setRange(y * r.width, (y + 1) * r.width, r.bits, sy * r.width);
+  }
+  return DotBitmap(r.width, rows, bits);
+}
+
+class _Rendered {
+  _Rendered(this.width, this.height, this.bits) {
+    for (var y = 0; y < height; y++) {
+      final row = bits.sublist(y * width, (y + 1) * width);
+      if (row.any((b) => b != 0)) {
+        inkTop = math.min(inkTop, y);
+        inkBottom = y;
+      }
+    }
+  }
+
+  final int width;
+  final int height;
+  final Uint8List bits;
+  int inkTop = 1 << 30;
+  int inkBottom = -1;
+
+  int get inkHeight => inkBottom < 0 ? 0 : inkBottom - inkTop + 1;
+}
+
+Future<_Rendered> _render(String text, double fontSize, bool bold) async {
   final painter = TextPainter(
     text: TextSpan(
       text: text,
       style: TextStyle(
         fontSize: fontSize,
-        height: 1.0,
         fontWeight: bold ? FontWeight.w800 : FontWeight.w400,
         color: const Color(0xFFFFFFFF),
       ),
@@ -61,30 +102,24 @@ Future<DotBitmap> rasterizeText(
   )..layout();
 
   // One blank column of padding on each side keeps glyphs from touching the
-  // edges when the text loops.
+  // edges when the text loops; vertical padding catches overhanging glyphs.
   final width = math.max(1, painter.width.ceil() + 2);
+  final height = math.max(1, painter.height.ceil() + 4);
   final recorder = ui.PictureRecorder();
-  final canvas = Canvas(recorder);
-  // Center the band from ascender top (~0.78em above the baseline) to
-  // descender bottom (~0.2em below) rather than the whole line box, which
-  // carries extra leading and would push the text upward.
-  final baseline = painter.computeDistanceToActualBaseline(
-    TextBaseline.alphabetic,
-  );
-  final targetBaseline = (rows - 0.98 * fontSize) / 2 + 0.78 * fontSize;
-  painter.paint(canvas, Offset(1, targetBaseline - baseline));
+  painter.paint(Canvas(recorder), const Offset(1, 2));
   final picture = recorder.endRecording();
-  final image = await picture.toImage(width, rows);
+  final image = await picture.toImage(width, height);
   final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
   image.dispose();
   picture.dispose();
   painter.dispose();
-  if (data == null) return DotBitmap.empty(rows);
 
-  final bits = Uint8List(width * rows);
-  for (var i = 0; i < bits.length; i++) {
-    // Alpha channel; text is drawn opaque white on a transparent canvas.
-    if (data.getUint8(i * 4 + 3) >= 110) bits[i] = 1;
+  final bits = Uint8List(width * height);
+  if (data != null) {
+    for (var i = 0; i < bits.length; i++) {
+      // Alpha channel; text is drawn opaque white on a transparent canvas.
+      if (data.getUint8(i * 4 + 3) >= 110) bits[i] = 1;
+    }
   }
-  return DotBitmap(width, rows, bits);
+  return _Rendered(width, height, bits);
 }

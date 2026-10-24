@@ -34,6 +34,9 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
   @override
   void initState() {
     super.initState();
+    // On the web, fonts (and per-script fallbacks such as Hangul) load lazily;
+    // redraw the bitmap once they arrive instead of keeping placeholder boxes.
+    PaintingBinding.instance.systemFonts.addListener(_rasterize);
     _rasterize();
     _ticker.start();
   }
@@ -68,6 +71,7 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
 
   @override
   void dispose() {
+    PaintingBinding.instance.systemFonts.removeListener(_rasterize);
     _ticker.dispose();
     _frame.dispose();
     super.dispose();

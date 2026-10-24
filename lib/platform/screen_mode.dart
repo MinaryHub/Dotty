@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'browser_fullscreen.dart';
+
 bool get isDesktop =>
     !kIsWeb &&
     (defaultTargetPlatform == TargetPlatform.windows ||
@@ -28,10 +30,13 @@ Future<void> initWindow() async {
 }
 
 /// Switches the whole app into an edge-to-edge sign mode: fullscreen window
-/// (desktop) or immersive system UI (Android), with the screen kept awake.
+/// (desktop), browser fullscreen (web) or immersive system UI (Android), with
+/// the screen kept awake.
 Future<void> enterSignMode() async {
   await _guard(() => WakelockPlus.enable());
-  if (isDesktop) {
+  if (kIsWeb) {
+    await _guard(requestBrowserFullscreen);
+  } else if (isDesktop) {
     await _guard(() => windowManager.setFullScreen(true));
   } else {
     await _guard(
@@ -42,7 +47,9 @@ Future<void> enterSignMode() async {
 
 Future<void> exitSignMode() async {
   await _guard(() => WakelockPlus.disable());
-  if (isDesktop) {
+  if (kIsWeb) {
+    await _guard(exitBrowserFullscreen);
+  } else if (isDesktop) {
     await _guard(() => windowManager.setFullScreen(false));
   } else {
     await _guard(

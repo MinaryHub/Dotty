@@ -40,6 +40,16 @@ void main() {
       expect(bmp.width, greaterThan(2));
       expect(bmp.litCount, greaterThan(0));
       expect((await rasterizeText('   ', rows: 16)).width, 0);
+
+      // Ink fills the height without being clipped and is centered.
+      final tall = await rasterizeText('ÁgÉ', rows: 12);
+      final litRows = [
+        for (var y = 0; y < tall.rows; y++)
+          if (List.generate(tall.width, (x) => tall.isOn(x, y)).any((b) => b))
+            y,
+      ];
+      expect(litRows.first, lessThanOrEqualTo(1));
+      expect(litRows.last, greaterThanOrEqualTo(10));
     });
   });
 }

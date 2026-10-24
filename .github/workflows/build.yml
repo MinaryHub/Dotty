@@ -33,6 +33,9 @@ jobs:
           - target: android
             os: ubuntu-latest
             artifact: build/app/outputs/flutter-apk/app-release.apk
+          - target: web
+            os: ubuntu-latest
+            artifact: build/web
           - target: linux
             os: ubuntu-latest
             artifact: build/linux/x64/release/bundle
@@ -62,7 +65,9 @@ jobs:
       - run: flutter pub get
       - if: matrix.target == 'android'
         run: flutter build apk --release
-      - if: matrix.target != 'android'
+      - if: matrix.target == 'web'
+        run: flutter build web --release --no-web-resources-cdn
+      - if: matrix.target != 'android' && matrix.target != 'web'
         run: flutter build ${{ matrix.target }} --release
       - uses: actions/upload-artifact@v4
         with:
