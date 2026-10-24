@@ -65,7 +65,7 @@ void main() {
 
   test('click sounds are short, audible and never clip', () {
     final click = synthesizeClick(1);
-    expect(click.length, clickSampleRate * 30 ~/ 1000);
+    expect(click.length, clickSampleRate * 75 ~/ 1000);
     final peak = click.map((s) => s.abs()).reduce((a, b) => a > b ? a : b);
     expect(peak, inInclusiveRange(0.2, 1.0));
     // Decays to near silence by the end.
@@ -80,5 +80,31 @@ void main() {
     expect(String.fromCharCodes(wav.sublist(0, 4)), 'RIFF');
     expect(String.fromCharCodes(wav.sublist(8, 12)), 'WAVE');
     expect(wav.length, 44 + 3 * 2);
+  });
+
+  test('discs accelerate, overshoot into the stop and settle', () {
+    final board = FlipBoard();
+    board.update(Uint8List.fromList([0]), 1, 1, 0, delayOf: (_, _) => 0);
+    board.update(Uint8List.fromList([1]), 1, 1, 1, delayOf: (_, _) => 0);
+    const turn = FlipBoard.turnSeconds;
+    // Slow start: less than a quarter turned after a third of the time.
+    expect(board.angleAt(0, 1 + turn / 3), lessThan(3.1416 / 4));
+    // Lands on its stop, then rebounds off it before resting.
+    expect(board.angleAt(0, 1 + turn), closeTo(3.1416, 1e-3));
+    final rebound = [
+      for (var k = 1; k < 10; k++)
+        board.angleAt(0, 1 + turn + FlipBoard.settleSeconds * k / 10),
+    ];
+    expect(rebound.any((a) => a < 3.1416 - 0.1), isTrue);
+    expect(board.angleAt(0, 1 + FlipBoard.flipSeconds), closeTo(3.1416, 1e-3));
+    expect(board.movingAt(0, 1 + FlipBoard.flipSeconds + 1e-6), isFalse);
+  });
+
+  test('every disc gets its own small brightness and tilt', () {
+    final board = FlipBoard();
+    board.update(Uint8List(64), 8, 8, 0, delayOf: (_, _) => 0);
+    expect(board.tint.every((t) => t >= 0.86 && t <= 1), isTrue);
+    expect(board.tilt.every((t) => t.abs() <= 0.05), isTrue);
+    expect(board.tint.toSet().length, greaterThan(32));
   });
 }
