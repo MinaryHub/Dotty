@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../dot_matrix/show_player.dart';
+import '../dot_matrix/sign_geometry.dart';
 import '../models/show_store.dart';
 import '../platform/screen_mode.dart';
 import '../sound/flip_sound.dart';
@@ -51,20 +52,34 @@ class _HomeScreenState extends State<HomeScreen> {
       _selectedId = store.value.scenes.first.id;
     }
 
-    final preview = Card(
-      clipBehavior: Clip.antiAlias,
-      margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-      child: InkWell(
-        onTap: _openSign,
-        child: ValueListenableBuilder(
-          valueListenable: store,
-          builder: (context, show, _) => ShowPlayer(
-            show: show,
-            soloSceneId: _playAll ? null : _selectedId,
-            onSceneChanged: (i) => setState(() => _playingIndex = i),
-            sound: true,
-          ),
-        ),
+    // Shaped exactly like the fullscreen sign, so what is set up here is
+    // what will be shown.
+    final preview = Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+      child: ValueListenableBuilder(
+        valueListenable: store,
+        builder: (context, show, _) {
+          final panel = show.panel;
+          final columns = signColumns(panel, signAspect(context, panel));
+          return Center(
+            child: AspectRatio(
+              aspectRatio: columns / panel.rows,
+              child: Card(
+                clipBehavior: Clip.antiAlias,
+                margin: EdgeInsets.zero,
+                child: InkWell(
+                  onTap: _openSign,
+                  child: ShowPlayer(
+                    show: show,
+                    soloSceneId: _playAll ? null : _selectedId,
+                    onSceneChanged: (i) => setState(() => _playingIndex = i),
+                    sound: true,
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
 
@@ -135,11 +150,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Expanded(
                   child: Column(
                     children: [
-                      Expanded(
-                        child: Center(
-                          child: AspectRatio(aspectRatio: 3, child: preview),
-                        ),
-                      ),
+                      Expanded(child: preview),
                       strip,
                       const SizedBox(height: 8),
                     ],
@@ -153,7 +164,7 @@ class _HomeScreenState extends State<HomeScreen> {
           return Column(
             children: [
               SizedBox(
-                height: (constraints.maxHeight * 0.24).clamp(100, 220),
+                height: (constraints.maxHeight * 0.3).clamp(120, 260),
                 width: double.infinity,
                 child: preview,
               ),

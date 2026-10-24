@@ -33,6 +33,8 @@ class PanelSettings {
     this.flipDots = false,
     this.flipSound = true,
     this.soundVolume = 0.6,
+    this.aspectRatio = 0,
+    this.flipSeconds = 0.19,
   });
 
   /// Vertical resolution in dots.
@@ -56,6 +58,13 @@ class PanelSettings {
   /// 0..1.
   final double soundVolume;
 
+  /// Width / height of the sign; 0 means the shape of this device's screen,
+  /// so the preview looks exactly like fullscreen.
+  final double aspectRatio;
+
+  /// How long one flip-dot disc takes to turn over and settle.
+  final double flipSeconds;
+
   static const minRows = 8;
   static const maxRows = 64;
 
@@ -70,6 +79,8 @@ class PanelSettings {
     bool? flipDots,
     bool? flipSound,
     double? soundVolume,
+    double? aspectRatio,
+    double? flipSeconds,
   }) {
     return PanelSettings(
       rows: rows ?? this.rows,
@@ -82,6 +93,8 @@ class PanelSettings {
       flipDots: flipDots ?? this.flipDots,
       flipSound: flipSound ?? this.flipSound,
       soundVolume: soundVolume ?? this.soundVolume,
+      aspectRatio: aspectRatio ?? this.aspectRatio,
+      flipSeconds: flipSeconds ?? this.flipSeconds,
     );
   }
 
@@ -96,6 +109,8 @@ class PanelSettings {
     'flipDots': flipDots,
     'flipSound': flipSound,
     'soundVolume': soundVolume,
+    'aspectRatio': aspectRatio,
+    'flipSeconds': flipSeconds,
   };
 
   factory PanelSettings.fromJson(Map<String, dynamic> json) {
@@ -112,6 +127,8 @@ class PanelSettings {
       flipDots: r.boolean('flipDots', d.flipDots),
       flipSound: r.boolean('flipSound', d.flipSound),
       soundVolume: r.number('soundVolume', d.soundVolume).clamp(0, 1),
+      aspectRatio: r.number('aspectRatio', d.aspectRatio).clamp(0, 8),
+      flipSeconds: r.number('flipSeconds', d.flipSeconds).clamp(0.08, 1.5),
     );
   }
 }
