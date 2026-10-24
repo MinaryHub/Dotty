@@ -9,9 +9,12 @@ import '../platform/screen_mode.dart';
 
 /// Fullscreen display. Tap to show controls, Esc to leave, Space to pause.
 class SignScreen extends StatefulWidget {
-  const SignScreen({super.key, required this.store});
+  const SignScreen({super.key, required this.store, this.soloSceneId});
 
   final ShowStore store;
+
+  /// Play only this scene, looping; null plays every scene in order.
+  final String? soloSceneId;
 
   @override
   State<SignScreen> createState() => _SignScreenState();
@@ -75,8 +78,12 @@ class _SignScreenState extends State<SignScreen> {
               children: [
                 ValueListenableBuilder(
                   valueListenable: widget.store,
-                  builder: (context, show, _) =>
-                      ShowPlayer(show: show, paused: _paused, sound: true),
+                  builder: (context, show, _) => ShowPlayer(
+                    show: show,
+                    paused: _paused,
+                    soloSceneId: widget.soloSceneId,
+                    sound: true,
+                  ),
                 ),
                 Positioned(
                   top: 0,

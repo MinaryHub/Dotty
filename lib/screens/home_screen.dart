@@ -38,7 +38,12 @@ class _HomeScreenState extends State<HomeScreen> {
     FlipSound.instance.unlock();
     Navigator.of(context).push(
       PageRouteBuilder(
-        pageBuilder: (_, _, _) => SignScreen(store: store),
+        // The whole show only when continuous play is on; otherwise just
+        // the scene being edited, as in the preview.
+        pageBuilder: (_, _, _) => SignScreen(
+          store: store,
+          soloSceneId: _playAll ? null : _selectedId,
+        ),
         transitionsBuilder: (_, animation, _, child) =>
             FadeTransition(opacity: animation, child: child),
       ),
@@ -134,10 +139,13 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(width: 8),
           Padding(
             padding: const EdgeInsets.only(right: 8),
-            child: FilledButton.icon(
-              icon: const Icon(Icons.fullscreen),
-              label: const Text('전체 화면'),
-              onPressed: _openSign,
+            child: Tooltip(
+              message: _playAll ? '모든 장면을 순서대로 전체 화면으로' : '선택한 장면만 전체 화면으로',
+              child: FilledButton.icon(
+                icon: const Icon(Icons.fullscreen),
+                label: const Text('전체 화면'),
+                onPressed: _openSign,
+              ),
             ),
           ),
         ],
