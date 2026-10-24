@@ -94,4 +94,34 @@ void main() {
       expect(await normalizeImportedImage(Uint8List(10)), isNull);
     });
   });
+
+  test('flip wave turns every column over, left to right', () {
+    const cols = 10;
+    FlipState out(double t) => FlipState(t, outgoing: true);
+    FlipState inc(double t) => FlipState(t, outgoing: false);
+
+    // Before: only the outgoing scene shows, unsqueezed.
+    for (var c = 0; c < cols; c++) {
+      expect(out(0).columnScale(c, cols), 1);
+      expect(inc(0).columnScale(c, cols), isNull);
+    }
+    // After: only the incoming scene shows.
+    for (var c = 0; c < cols; c++) {
+      expect(out(1).columnScale(c, cols), isNull);
+      expect(inc(1).columnScale(c, cols), closeTo(1, 1e-9));
+    }
+    // Midway the left edge has turned while the right edge has not.
+    expect(inc(0.5).columnScale(0, cols), isNotNull);
+    expect(out(0.5).columnScale(cols - 1, cols), isNotNull);
+    // Each column shows exactly one side at a time.
+    for (final t in [0.1, 0.3, 0.5, 0.7, 0.9]) {
+      for (var c = 0; c < cols; c++) {
+        final shown = [
+          out(t).columnScale(c, cols),
+          inc(t).columnScale(c, cols),
+        ].whereType<double>();
+        expect(shown.length, lessThanOrEqualTo(1));
+      }
+    }
+  });
 }

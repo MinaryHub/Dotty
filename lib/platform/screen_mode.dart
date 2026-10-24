@@ -32,17 +32,23 @@ Future<void> initWindow() async {
 /// Switches the whole app into an edge-to-edge sign mode: fullscreen window
 /// (desktop), browser fullscreen (web) or immersive system UI (Android), with
 /// the screen kept awake.
+///
+/// On the web, call this directly from the click handler: browsers only grant
+/// fullscreen during the user's gesture, so it is requested before anything
+/// else is awaited.
 Future<void> enterSignMode() async {
-  await _guard(() => WakelockPlus.enable());
+  final Future<void> screen;
   if (kIsWeb) {
-    await _guard(requestBrowserFullscreen);
+    screen = _guard(requestBrowserFullscreen);
   } else if (isDesktop) {
-    await _guard(() => windowManager.setFullScreen(true));
+    screen = _guard(() => windowManager.setFullScreen(true));
   } else {
-    await _guard(
+    screen = _guard(
       () => SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky),
     );
   }
+  await _guard(() => WakelockPlus.enable());
+  await screen;
 }
 
 Future<void> exitSignMode() async {

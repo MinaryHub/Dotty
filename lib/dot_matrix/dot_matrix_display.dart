@@ -13,6 +13,7 @@ class DotMatrixDisplay extends StatefulWidget {
     required this.panel,
     this.paused = false,
     this.onPass,
+    this.flip,
   });
 
   final Scene scene;
@@ -22,6 +23,9 @@ class DotMatrixDisplay extends StatefulWidget {
   /// Called with the running count each time scrolling content has fully
   /// crossed the panel.
   final ValueChanged<int>? onPass;
+
+  /// Set while this scene takes part in a flip transition.
+  final FlipState? flip;
 
   @override
   State<DotMatrixDisplay> createState() => _DotMatrixDisplayState();
@@ -143,6 +147,7 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
               scene: widget.scene,
               panel: widget.panel,
               frame: _frame,
+              flip: widget.flip,
             ),
             child: const SizedBox.expand(),
           );

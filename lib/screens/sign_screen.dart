@@ -68,37 +68,57 @@ class _SignScreenState extends State<SignScreen> {
           body: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: _toggleControls,
+            // Expand to the whole screen; without this the stack shrinks to
+            // the height of the control bar and so does the sign.
             child: Stack(
+              fit: StackFit.expand,
               children: [
-                Positioned.fill(
-                  child: ValueListenableBuilder(
-                    valueListenable: widget.store,
-                    builder: (context, show, _) =>
-                        ShowPlayer(show: show, paused: _paused),
-                  ),
+                ValueListenableBuilder(
+                  valueListenable: widget.store,
+                  builder: (context, show, _) =>
+                      ShowPlayer(show: show, paused: _paused),
                 ),
-                AnimatedOpacity(
-                  opacity: _controlsVisible ? 1 : 0,
-                  duration: const Duration(milliseconds: 250),
-                  child: IgnorePointer(
-                    ignoring: !_controlsVisible,
-                    child: SafeArea(
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Row(
-                          children: [
-                            _RoundButton(
-                              icon: Icons.close,
-                              tooltip: '닫기 (Esc)',
-                              onPressed: () => Navigator.of(context).maybePop(),
-                            ),
-                            const Spacer(),
-                            _RoundButton(
-                              icon: _paused ? Icons.play_arrow : Icons.pause,
-                              tooltip: _paused ? '재생 (Space)' : '일시정지 (Space)',
-                              onPressed: _togglePause,
-                            ),
-                          ],
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: AnimatedOpacity(
+                    opacity: _controlsVisible ? 1 : 0,
+                    duration: const Duration(milliseconds: 250),
+                    child: IgnorePointer(
+                      ignoring: !_controlsVisible,
+                      child: SafeArea(
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            children: [
+                              _RoundButton(
+                                icon: Icons.close,
+                                tooltip: '닫기 (Esc)',
+                                onPressed: () =>
+                                    Navigator.of(context).maybePop(),
+                              ),
+                              const Spacer(),
+                              _RoundButton(
+                                // If the browser left fullscreen (e.g. its own
+                                // Esc), this brings it back.
+                                icon: Icons.fullscreen,
+                                tooltip: '화면 꽉 채우기',
+                                onPressed: () {
+                                  enterSignMode();
+                                  _scheduleHide();
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              _RoundButton(
+                                icon: _paused ? Icons.play_arrow : Icons.pause,
+                                tooltip: _paused
+                                    ? '재생 (Space)'
+                                    : '일시정지 (Space)',
+                                onPressed: _togglePause,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),

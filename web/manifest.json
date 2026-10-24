@@ -31,5 +31,9 @@
             "type": "image/png",
             "purpose": "maskable"
         }
+    ],
+    "display_override": [
+        "fullscreen",
+        "standalone"
     ]
 }

@@ -3,6 +3,7 @@ import 'package:flutter/scheduler.dart';
 
 import '../models/show.dart';
 import 'dot_matrix_display.dart';
+import 'dot_matrix_painter.dart';
 
 /// Plays a [Show]: each scene for its duration, then the next one with its
 /// entry transition, looping forever.
@@ -57,6 +58,11 @@ class _ShowPlayerState extends State<ShowPlayer>
 
   bool get _advances => widget.soloSceneId == null && _scenes.length > 1;
 
+  /// A flip wave needs longer than a fade or slide to read well.
+  double get _transitionMs =>
+      widget.show.panel.transitionMs *
+      (_current.transition == SceneTransition.flip ? 2.5 : 1);
+
   @override
   void initState() {
     super.initState();
@@ -81,7 +87,7 @@ class _ShowPlayerState extends State<ShowPlayer>
 
     if (_outgoing != null) {
       setState(() {
-        _transition += dt * 1000 / widget.show.panel.transitionMs;
+        _transition += dt * 1000 / _transitionMs;
         if (_transition >= 1) {
           _transition = 1;
           _outgoing = null;
@@ -120,12 +126,13 @@ class _ShowPlayerState extends State<ShowPlayer>
     super.dispose();
   }
 
-  Widget _display(_PlayingScene p) {
+  Widget _display(_PlayingScene p, FlipState? flip) {
     return DotMatrixDisplay(
       scene: p.scene,
       panel: widget.show.panel,
       paused: widget.paused,
       onPass: (n) => _onPass(p.scene, n),
+      flip: flip,
     );
   }
 
@@ -158,34 +165,47 @@ class _ShowPlayerState extends State<ShowPlayer>
               : Curves.easeInOut.transform(_transition.clamp(0, 1));
           // Moves snap to whole dots so the grid stays aligned like a real
           // LED panel shifting its content.
-          final pitch = size.height / widget.show.panel.rows;
-          double snap(double v) => (v / pitch).round() * pitch;
+          final rows = widget.show.panel.rows;
+          final pitchY = size.height / rows;
+          final pitchX = size.width / columnsFor(size, rows);
+          double snap(double v, double pitch) => (v / pitch).round() * pitch;
 
           var inOffset = Offset.zero, outOffset = Offset.zero;
           var inOpacity = 1.0;
+          FlipState? inFlip, outFlip;
           switch (current.scene.transition) {
             case SceneTransition.cut:
             case SceneTransition.fade:
               inOpacity = t;
             case SceneTransition.slideLeft:
-              final dx = snap(size.width * t);
+              final dx = snap(size.width * t, pitchX);
               outOffset = Offset(-dx, 0);
               inOffset = Offset(size.width - dx, 0);
             case SceneTransition.slideUp:
-              final dy = snap(size.height * t);
+              final dy = snap(size.height * t, pitchY);
               outOffset = Offset(0, -dy);
               inOffset = Offset(0, size.height - dy);
+            case SceneTransition.flip:
+              if (out != null) {
+                outFlip = FlipState(t, outgoing: true);
+                inFlip = FlipState(t, outgoing: false);
+              }
           }
 
           // Same wrapper structure for every child, keyed per playing scene,
           // so a display keeps its state (scroll position) when it changes
           // role from incoming to settled to outgoing.
-          Widget layer(_PlayingScene p, Offset offset, double opacity) {
+          Widget layer(
+            _PlayingScene p,
+            Offset offset,
+            double opacity,
+            FlipState? flip,
+          ) {
             return KeyedSubtree(
               key: p.key,
               child: Transform.translate(
                 offset: offset,
-                child: Opacity(opacity: opacity, child: _display(p)),
+                child: Opacity(opacity: opacity, child: _display(p, flip)),
               ),
             );
           }
@@ -193,8 +213,11 @@ class _ShowPlayerState extends State<ShowPlayer>
           return Stack(
             fit: StackFit.expand,
             children: [
-              if (out != null) layer(out, outOffset, 1),
-              layer(current, inOffset, inOpacity),
+              // Flipping scenes only paint their dots; they share this
+              // background.
+              ColoredBox(color: widget.show.panel.backgroundColor),
+              if (out != null) layer(out, outOffset, 1, outFlip),
+              layer(current, inOffset, inOpacity, inFlip),
             ],
           );
         },

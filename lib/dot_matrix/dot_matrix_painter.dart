@@ -44,18 +44,65 @@ int sourceColumn({
       : screenColumn + bitmapWidth - pos;
 }
 
+/// Flip-dot transition state for one of the two scenes involved: every dot
+/// column turns over in a wave from left to right, showing the outgoing
+/// scene on its front and the incoming scene on its back.
+@immutable
+class FlipState {
+  const FlipState(this.progress, {required this.outgoing});
+
+  /// Transition progress, 0..1.
+  final double progress;
+
+  /// Whether this side is the scene being flipped away.
+  final bool outgoing;
+
+  /// Share of the transition over which the wave travels across the panel;
+  /// the rest is how long each column takes to turn.
+  static const _spread = 0.6;
+
+  /// How far column [c] of [cols] has turned, 0..1.
+  double phase(int c, int cols) {
+    final start = cols <= 1 ? 0.0 : _spread * c / (cols - 1);
+    return ((progress - start) / (1 - _spread)).clamp(0.0, 1.0);
+  }
+
+  /// Horizontal squeeze of column [c] as it turns, or null while this side
+  /// of the dots faces away.
+  double? columnScale(int c, int cols) {
+    final p = phase(c, cols);
+    final s = math.cos(math.pi * p);
+    if (outgoing) return p < 0.5 ? s : null;
+    return p > 0.5 ? -s : null;
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is FlipState &&
+      other.progress == progress &&
+      other.outgoing == outgoing;
+
+  @override
+  int get hashCode => Object.hash(progress, outgoing);
+}
+
 class DotMatrixPainter extends CustomPainter {
   DotMatrixPainter({
     required this.bitmap,
     required this.scene,
     required this.panel,
     required this.frame,
+    this.flip,
   }) : super(repaint: frame);
 
   final DotBitmap bitmap;
   final Scene scene;
   final PanelSettings panel;
   final ValueListenable<DotFrame> frame;
+
+  /// Set while this scene is part of a flip transition. The background is
+  /// then left to the caller so both scenes can share it.
+  final FlipState? flip;
 
   static const _rainbow = [
     Color(0xFFFF3B30),
@@ -68,17 +115,33 @@ class DotMatrixPainter extends CustomPainter {
     Color(0xFFFF3B30),
   ];
 
+  /// Rainbow color at position [t] (wrapping) along the gradient.
+  static Color _rainbowAt(double t) {
+    final x = (t % 1) * (_rainbow.length - 1);
+    final i = x.floor().clamp(0, _rainbow.length - 2);
+    return Color.lerp(_rainbow[i], _rainbow[i + 1], x - i)!;
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.drawRect(Offset.zero & size, Paint()..color = panel.backgroundColor);
+    final flip = this.flip;
+    if (flip == null) {
+      canvas.drawRect(
+        Offset.zero & size,
+        Paint()..color = panel.backgroundColor,
+      );
+    }
 
     final rows = panel.rows;
     if (size.isEmpty) return;
-    final pitch = size.height / rows;
+    // The grid fills the whole area: rows fix the vertical pitch, and the
+    // columns that fit are spread to the full width (a hair wider than tall).
+    final pitchY = size.height / rows;
     final cols = columnsFor(size, rows);
-    final originX = (size.width - cols * pitch) / 2 + pitch / 2;
-    final originY = pitch / 2;
-    final dot = pitch * panel.dotFill;
+    final pitchX = size.width / cols;
+    final originX = pitchX / 2;
+    final originY = pitchY / 2;
+    final dot = math.min(pitchX, pitchY) * panel.dotFill;
     final cap = panel.shape == DotShape.circle
         ? StrokeCap.round
         : StrokeCap.square;
@@ -87,11 +150,7 @@ class DotMatrixPainter extends CustomPainter {
     final lit =
         !scene.blink || ((f.seconds * scene.blinkHz * 2).floor() % 2 == 0);
     // The bitmap may briefly lag a rows change while it re-rasterizes.
-    final ready = bitmap.rows == rows;
-
-    final off = Float32List(cols * rows * 2);
-    final on = Float32List(cols * rows * 2);
-    var offN = 0, onN = 0;
+    final ready = lit && bitmap.rows == rows;
     // sourceColumn is linear in the screen column: src = c + shift.
     final shift = sourceColumn(
       screenColumn: 0,
@@ -100,64 +159,45 @@ class DotMatrixPainter extends CustomPainter {
       scroll: f.scroll,
       direction: scene.direction,
     );
-    for (var c = 0; c < cols; c++) {
-      final src = c + shift;
-      final x = originX + c * pitch;
-      for (var r = 0; r < rows; r++) {
-        final y = originY + r * pitch;
-        if (lit && ready && bitmap.isOn(src, r)) {
-          on[onN++] = x;
-          on[onN++] = y;
-        } else {
-          off[offN++] = x;
-          off[offN++] = y;
-        }
-      }
-    }
 
-    final offColor = scene.usesDotColor
-        ? scene.dotColor
-        : const Color(0xFFFFFFFF);
-    if (panel.offDotOpacity > 0 && offN > 0) {
-      canvas.drawRawPoints(
-        ui.PointMode.points,
-        Float32List.sublistView(off, 0, offN),
-        Paint()
-          ..color = offColor.withValues(alpha: panel.offDotOpacity)
-          ..strokeWidth = dot
-          ..strokeCap = cap,
-      );
-    }
-    if (onN == 0) return;
-
-    final onPoints = Float32List.sublistView(on, 0, onN);
+    final offPaint = panel.offDotOpacity <= 0
+        ? null
+        : (Paint()
+            ..color =
+                (scene.usesDotColor ? scene.dotColor : const Color(0xFFFFFFFF))
+                    .withValues(alpha: panel.offDotOpacity)
+            ..strokeWidth = dot
+            ..strokeCap = cap);
     final colors = scene.usesDotColor ? null : bitmap.colors;
-    Paint litPaint() {
+    final slide = f.seconds * 0.25 % 1;
+
+    // [tx]: x of the panel's left edge in the current canvas coordinates.
+    Paint litPaint({required double tx, Color? solid}) {
       final p = Paint()
         ..strokeWidth = dot
         ..strokeCap = cap;
       if (colors != null) {
         // Each bitmap pixel lands exactly on its dot's center, so nearest
         // sampling gives every dot the color of its source pixel.
-        final tx = originX - (shift + 0.5) * pitch;
         p.shader = ui.ImageShader(
           colors,
           TileMode.clamp,
           TileMode.clamp,
           Float64List.fromList([
-            pitch, 0, 0, 0, //
-            0, pitch, 0, 0, //
+            pitchX, 0, 0, 0, //
+            0, pitchY, 0, 0, //
             0, 0, 1, 0, //
-            tx, 0, 0, 1, //
+            tx - shift * pitchX, 0, 0, 1, //
           ]),
           filterQuality: FilterQuality.none,
         );
+      } else if (solid != null) {
+        p.color = solid;
       } else if (scene.rainbow) {
         // Gradient slides sideways over time for a flowing rainbow.
-        final slide = (f.seconds * 0.25 % 1) * size.width;
         p.shader = ui.Gradient.linear(
-          Offset(-slide, 0),
-          Offset(size.width - slide, 0),
+          Offset(-slide * size.width, 0),
+          Offset(size.width - slide * size.width, 0),
           _rainbow,
           null,
           TileMode.repeated,
@@ -168,16 +208,88 @@ class DotMatrixPainter extends CustomPainter {
       return p;
     }
 
-    if (panel.glow) {
+    void drawLit(Float32List points, Paint Function() paint) {
+      if (points.isEmpty) return;
+      if (panel.glow) {
+        canvas.drawRawPoints(
+          ui.PointMode.points,
+          points,
+          paint()
+            ..strokeWidth = dot * 1.3
+            ..maskFilter = MaskFilter.blur(BlurStyle.normal, dot * 0.5),
+        );
+      }
+      canvas.drawRawPoints(ui.PointMode.points, points, paint());
+    }
+
+    if (flip != null) {
+      // Turning columns are drawn one by one, each squeezed horizontally
+      // around its own center.
+      final off = Float32List(rows * 2);
+      final on = Float32List(rows * 2);
+      for (var c = 0; c < cols; c++) {
+        final scale = flip.columnScale(c, cols);
+        if (scale == null || scale < 0.02) continue;
+        final src = c + shift;
+        var offN = 0, onN = 0;
+        for (var r = 0; r < rows; r++) {
+          final y = originY + r * pitchY;
+          if (ready && bitmap.isOn(src, r)) {
+            on[onN++] = 0;
+            on[onN++] = y;
+          } else {
+            off[offN++] = 0;
+            off[offN++] = y;
+          }
+        }
+        final x = originX + c * pitchX;
+        canvas.save();
+        canvas.translate(x, 0);
+        canvas.scale(scale, 1);
+        if (offPaint != null && offN > 0) {
+          canvas.drawRawPoints(
+            ui.PointMode.points,
+            Float32List.sublistView(off, 0, offN),
+            offPaint,
+          );
+        }
+        final rainbow = colors == null && scene.rainbow
+            ? _rainbowAt(x / size.width + slide)
+            : null;
+        drawLit(
+          Float32List.sublistView(on, 0, onN),
+          () => litPaint(tx: -x, solid: rainbow),
+        );
+        canvas.restore();
+      }
+      return;
+    }
+
+    final off = Float32List(cols * rows * 2);
+    final on = Float32List(cols * rows * 2);
+    var offN = 0, onN = 0;
+    for (var c = 0; c < cols; c++) {
+      final src = c + shift;
+      final x = originX + c * pitchX;
+      for (var r = 0; r < rows; r++) {
+        final y = originY + r * pitchY;
+        if (ready && bitmap.isOn(src, r)) {
+          on[onN++] = x;
+          on[onN++] = y;
+        } else {
+          off[offN++] = x;
+          off[offN++] = y;
+        }
+      }
+    }
+    if (offPaint != null && offN > 0) {
       canvas.drawRawPoints(
         ui.PointMode.points,
-        onPoints,
-        litPaint()
-          ..strokeWidth = dot * 1.3
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, dot * 0.5),
+        Float32List.sublistView(off, 0, offN),
+        offPaint,
       );
     }
-    canvas.drawRawPoints(ui.PointMode.points, onPoints, litPaint());
+    drawLit(Float32List.sublistView(on, 0, onN), () => litPaint(tx: 0));
   }
 
   @override
@@ -185,5 +297,6 @@ class DotMatrixPainter extends CustomPainter {
       old.bitmap != bitmap ||
       old.scene != scene ||
       old.panel != panel ||
-      old.frame != frame;
+      old.frame != frame ||
+      old.flip != flip;
 }

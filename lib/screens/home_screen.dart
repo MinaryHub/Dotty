@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../dot_matrix/show_player.dart';
 import '../models/show_store.dart';
+import '../platform/screen_mode.dart';
 import 'editor/panel_editor.dart';
 import 'editor/scene_editor.dart';
 import 'editor/scene_strip.dart';
@@ -30,6 +31,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void _select(String id) => setState(() => _selectedId = id);
 
   void _openSign() {
+    // Within the tap itself, so the browser allows going fullscreen.
+    enterSignMode();
     Navigator.of(context).push(
       PageRouteBuilder(
         pageBuilder: (_, _, _) => SignScreen(store: store),
