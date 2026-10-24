@@ -90,27 +90,31 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
       _shown.id == widget.scene.id && _shownEntry == widget.entry;
 
   /// Look and motion come from the latest settings of the shown scene.
-  /// Still content wider than the panel scrolls anyway, like a real sign,
-  /// rather than showing only its middle.
   Scene get _look {
     final look = _showingCurrent ? widget.scene : _shown;
+    if (look.direction == MarqueeDirection.none) {
+      // Still content wider than the panel scrolls anyway, like a real sign,
+      // rather than showing only its middle — at a fixed pace, since a still
+      // scene has no speed of its own. (A still thumbnail stays centered.)
+      final bitmap = _bitmap;
+      if (!widget.paused && bitmap != null && bitmap.width > _columns) {
+        return look.copyWith(
+          direction: MarqueeDirection.left,
+          speed: overflowScrollSpeed,
+        );
+      }
+      return look;
+    }
     // Speed 0 means standing still: show the content centered rather than
     // frozen at its scroll start (off screen).
     if (look.speed <= 0) {
-      return look.direction == MarqueeDirection.none
-          ? look
-          : look.copyWith(direction: MarqueeDirection.none);
-    }
-    final bitmap = _bitmap;
-    // (A still thumbnail keeps the centered view instead.)
-    if (look.direction == MarqueeDirection.none &&
-        !widget.paused &&
-        bitmap != null &&
-        bitmap.width > _columns) {
-      return look.copyWith(direction: MarqueeDirection.left);
+      return look.copyWith(direction: MarqueeDirection.none);
     }
     return look;
   }
+
+  /// Columns per second at which still-but-too-wide content scrolls.
+  static const overflowScrollSpeed = 15.0;
 
   @override
   void initState() {
@@ -227,7 +231,7 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
       }
     }
     _seconds += dt;
-    _scroll += dt * look.speed;
+    if (look.direction != MarqueeDirection.none) _scroll += dt * look.speed;
     if (widget.panel.flipDots) _updateBoard(look);
     _frame.value = DotFrame(scroll: _scroll, seconds: _seconds);
 
