@@ -68,6 +68,7 @@ Future<DotBitmap> rasterizeText(
   String text, {
   required int rows,
   bool bold = true,
+  int? maxWidth,
 }) async {
   if (text.trim().isEmpty) return DotBitmap.empty(rows);
 
@@ -76,6 +77,19 @@ Future<DotBitmap> rasterizeText(
   for (var attempt = 0; attempt < 3 && r.inkHeight > rows; attempt++) {
     fontSize *= rows / r.inkHeight;
     r = await _render(text, fontSize, bold);
+  }
+  // Text that doesn't move should fit the panel's width, or only its middle
+  // shows. Shrink it a little if that is enough; beyond that glyphs (Hangul
+  // above all) turn to mush, so leave it to the display to scroll it.
+  final smallest = fontSize * 0.75;
+  if (maxWidth != null && r.width > maxWidth) {
+    final fit = fontSize * maxWidth / r.width * 0.98;
+    if (fit >= smallest) {
+      for (var attempt = 0; attempt < 3 && r.width > maxWidth; attempt++) {
+        fontSize = math.max(smallest, fontSize * maxWidth / r.width * 0.98);
+        r = await _render(text, fontSize, bold);
+      }
+    }
   }
   if (r.inkHeight == 0) return DotBitmap.empty(rows);
 

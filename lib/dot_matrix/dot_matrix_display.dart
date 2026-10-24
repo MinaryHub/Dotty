@@ -82,7 +82,20 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
       _shown.id == widget.scene.id && _shownEntry == widget.entry;
 
   /// Look and motion come from the latest settings of the shown scene.
-  Scene get _look => _showingCurrent ? widget.scene : _shown;
+  /// Still content wider than the panel scrolls anyway, like a real sign,
+  /// rather than showing only its middle.
+  Scene get _look {
+    final look = _showingCurrent ? widget.scene : _shown;
+    final bitmap = _bitmap;
+    // (A still thumbnail keeps the centered view instead.)
+    if (look.direction == MarqueeDirection.none &&
+        !widget.paused &&
+        bitmap != null &&
+        bitmap.width > _columns) {
+      return look.copyWith(direction: MarqueeDirection.left);
+    }
+    return look;
+  }
 
   @override
   void initState() {
@@ -101,6 +114,9 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
     final contentChanged =
         s.id != o.id ||
         widget.entry != old.entry ||
+        widget.columns != old.columns ||
+        (s.direction == MarqueeDirection.none) !=
+            (o.direction == MarqueeDirection.none) ||
         s.kind != o.kind ||
         widget.panel.rows != old.panel.rows ||
         (s.kind == SceneKind.text
@@ -132,7 +148,12 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
               keepColors: s.imageColorMode == ImageColorMode.original,
             );
     } else {
-      bitmap = await rasterizeText(s.text, rows: rows, bold: s.bold);
+      bitmap = await rasterizeText(
+        s.text,
+        rows: rows,
+        bold: s.bold,
+        maxWidth: s.direction == MarqueeDirection.none ? widget.columns : null,
+      );
     }
     // Drop stale results when the content changed again while rendering.
     if (!mounted || request != _rasterRequest) {
@@ -150,6 +171,10 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
       }
       _shown = s;
       _shownEntry = entry;
+      // A still display (scene thumbnail) has no ticks to turn its discs:
+      // reset them so the next build lays them out from the new content,
+      // e.g. once a web font for Hangul has arrived.
+      if (widget.paused) _board.cols = 0;
     });
     // Release the old image after the frame that stops painting it.
     if (old != null) {
@@ -225,11 +250,15 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
           };
     }
 
-    // While text scrolls, discs flip every column step; keep each turn
-    // shorter than a step so the text stays readable.
+    // While text scrolls, discs flip at every column step; past a few
+    // steps per turn the text smears, so cap the turn there. Blinking
+    // discs must finish turning within one blink.
     var flipSeconds = widget.panel.flipSeconds;
     if (look.direction != MarqueeDirection.none && look.speed > 0) {
-      flipSeconds = math.min(flipSeconds, 0.9 / look.speed);
+      flipSeconds = math.min(flipSeconds, 6 / look.speed);
+    }
+    if (look.blink) {
+      flipSeconds = math.min(flipSeconds, 0.9 / (2 * look.blinkHz));
     }
     _board.timeScale = flipSeconds / FlipBoard.flipSeconds;
     final sound = widget.sound && widget.panel.flipSound;

@@ -51,8 +51,11 @@ class PanelEditor extends StatelessWidget {
                 onChanged: (v) => update((p) => p.copyWith(flipSeconds: v)),
               ),
               const Hint(
-                '원판 하나가 뒤집혀 멈출 때까지의 시간입니다. 장면이 바뀔 때 물결이 '
-                '화면을 지나가는 시간은 아래 "전환 효과 시간"으로 조절합니다.',
+                '원판 하나가 뒤집혀 멈출 때까지의 시간입니다. 고정된 장면이 바뀔 때 '
+                '가장 잘 보입니다. 빠르게 흐르는 글자나 깜빡임에서는 글자가 뭉개지지 '
+                '않도록 자동으로 짧아지니, 뒤집히는 모습을 보려면 스크롤 속도를 낮추세요 '
+                '(예: 5칸/초). 장면이 바뀔 때 물결이 화면을 지나가는 시간은 아래 '
+                '"전환 효과 시간"으로 조절합니다.',
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
