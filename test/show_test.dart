@@ -91,4 +91,37 @@ void main() {
     expect(flip(0.19).flipSeconds, const PanelSettings().flipSeconds);
     expect(flip(0.3).flipSeconds, 0.3);
   });
+
+  test('clock formats', () {
+    final t = DateTime(2026, 10, 24, 14, 5, 9);
+    expect(formatClock(t, ClockFormat.hm), '14:05');
+    expect(formatClock(t, ClockFormat.hms), '14:05:09');
+    expect(formatClock(t, ClockFormat.hm12), '오후 2:05');
+    expect(formatClock(t, ClockFormat.dateHm), '10/24 14:05');
+    expect(
+      formatClock(DateTime(2026, 1, 1, 0, 7), ClockFormat.hm12),
+      '오전 12:07',
+    );
+    expect(
+      formatClock(DateTime(2026, 1, 1, 12, 0), ClockFormat.hm12),
+      '오후 12:00',
+    );
+  });
+
+  test('clock scenes round-trip and use the dot color', () {
+    final scene = Scene(
+      id: 'c',
+      kind: SceneKind.clock,
+      clockFormat: ClockFormat.hms,
+    );
+    final back = Scene.fromJson(scene.toJson());
+    expect(back.kind, SceneKind.clock);
+    expect(back.clockFormat, ClockFormat.hms);
+    expect(back.usesDotColor, isTrue);
+    expect(
+      Show.initial().scenes.any((s) => s.kind == SceneKind.clock),
+      isTrue,
+      reason: 'the default show demos the clock',
+    );
+  });
 }

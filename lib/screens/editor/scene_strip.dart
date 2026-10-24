@@ -34,12 +34,15 @@ class SceneStrip extends StatelessWidget {
         kind: kind,
         image: image,
         text: kind == SceneKind.text ? '새 장면' : '',
-        direction: kind == SceneKind.image
-            ? MarqueeDirection.none
-            : MarqueeDirection.left,
-        durationMode: kind == SceneKind.image
-            ? DurationMode.seconds
-            : DurationMode.passes,
+        direction: kind == SceneKind.text
+            ? MarqueeDirection.left
+            : MarqueeDirection.none,
+        durationMode: kind == SceneKind.text
+            ? DurationMode.passes
+            : DurationMode.seconds,
+        dotColor: kind == SceneKind.clock
+            ? const Color(0xFF00E5FF)
+            : const Scene(id: '').dotColor,
       ),
       afterId: selectedId,
     );
@@ -58,7 +61,7 @@ class SceneStrip extends StatelessWidget {
       valueListenable: store,
       builder: (context, show, _) {
         return SizedBox(
-          height: 104,
+          height: 136,
           child: Row(
             children: [
               Expanded(
@@ -107,11 +110,17 @@ class SceneStrip extends StatelessWidget {
                       label: '문구 추가',
                       onPressed: () => _add(SceneKind.text),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     _AddButton(
                       icon: Icons.add_photo_alternate_outlined,
                       label: '이미지 추가',
                       onPressed: () => _addImage(context),
+                    ),
+                    const SizedBox(height: 4),
+                    _AddButton(
+                      icon: Icons.schedule,
+                      label: '시계 추가',
+                      onPressed: () => _add(SceneKind.clock),
                     ),
                   ],
                 ),
@@ -236,12 +245,11 @@ class _SceneCard extends StatelessWidget {
                         style: Theme.of(context).textTheme.labelLarge,
                       ),
                       const SizedBox(width: 6),
-                      Icon(
-                        scene.kind == SceneKind.image
-                            ? Icons.image_outlined
-                            : Icons.text_fields,
-                        size: 16,
-                      ),
+                      Icon(switch (scene.kind) {
+                        SceneKind.text => Icons.text_fields,
+                        SceneKind.image => Icons.image_outlined,
+                        SceneKind.clock => Icons.schedule,
+                      }, size: 16),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
