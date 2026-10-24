@@ -3,15 +3,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../dot_matrix/dot_matrix_display.dart';
-import '../models/settings_store.dart';
+import '../dot_matrix/show_player.dart';
+import '../models/show_store.dart';
 import '../platform/screen_mode.dart';
 
 /// Fullscreen display. Tap to show controls, Esc to leave, Space to pause.
 class SignScreen extends StatefulWidget {
   const SignScreen({super.key, required this.store});
 
-  final SettingsStore store;
+  final ShowStore store;
 
   @override
   State<SignScreen> createState() => _SignScreenState();
@@ -73,8 +73,8 @@ class _SignScreenState extends State<SignScreen> {
                 Positioned.fill(
                   child: ValueListenableBuilder(
                     valueListenable: widget.store,
-                    builder: (context, settings, _) =>
-                        DotMatrixDisplay(settings: settings, paused: _paused),
+                    builder: (context, show, _) =>
+                        ShowPlayer(show: show, paused: _paused),
                   ),
                 ),
                 AnimatedOpacity(

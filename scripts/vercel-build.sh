@@ -5,6 +5,8 @@ set -euo pipefail
 
 FLUTTER_VERSION="${FLUTTER_VERSION:-3.47.8}"
 FLUTTER_HOME="${FLUTTER_HOME:-$PWD/.flutter-sdk}"
+# URL path the app is served under (apps.kimserv.com/dotty/).
+BASE_PATH="${DOTTY_BASE_PATH:-/dotty/}"
 
 if ! command -v unzip >/dev/null 2>&1; then
   # Flutter needs unzip to unpack the Dart SDK; Vercel's image uses dnf.
@@ -22,4 +24,9 @@ flutter config --no-analytics --enable-web >/dev/null
 flutter --version
 flutter pub get
 # Serve CanvasKit from our own deployment instead of Google's CDN.
-flutter build web --release --no-web-resources-cdn
+flutter build web --release --no-web-resources-cdn --base-href "$BASE_PATH"
+
+# Lay the app out at its URL path so the static output needs no rewrites.
+rm -rf build/site
+mkdir -p "build/site$BASE_PATH"
+cp -R build/web/. "build/site$BASE_PATH"

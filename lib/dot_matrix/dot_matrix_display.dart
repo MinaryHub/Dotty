@@ -1,20 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
-import '../models/display_settings.dart';
+import '../models/show.dart';
 import 'dot_bitmap.dart';
 import 'dot_matrix_painter.dart';
 
-/// An animated LED dot-matrix sign showing [settings.text].
+/// An animated LED dot-matrix panel showing one [scene].
 class DotMatrixDisplay extends StatefulWidget {
   const DotMatrixDisplay({
     super.key,
-    required this.settings,
+    required this.scene,
+    required this.panel,
     this.paused = false,
+    this.onPass,
   });
 
-  final DisplaySettings settings;
+  final Scene scene;
+  final PanelSettings panel;
   final bool paused;
+
+  /// Called with the running count each time scrolling content has fully
+  /// crossed the panel.
+  final ValueChanged<int>? onPass;
 
   @override
   State<DotMatrixDisplay> createState() => _DotMatrixDisplayState();
@@ -26,10 +33,12 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
   final _frame = ValueNotifier(const DotFrame());
   DotBitmap? _bitmap;
   int _rasterRequest = 0;
+  int _columns = 1;
 
   Duration _lastTick = Duration.zero;
   double _scroll = 0;
   double _seconds = 0;
+  int _passes = 0;
 
   @override
   void initState() {
@@ -44,20 +53,51 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
   @override
   void didUpdateWidget(DotMatrixDisplay old) {
     super.didUpdateWidget(old);
-    final s = widget.settings, o = old.settings;
-    if (s.text != o.text || s.rows != o.rows || s.bold != o.bold) {
-      _rasterize();
+    final s = widget.scene, o = old.scene;
+    final contentChanged =
+        s.kind != o.kind ||
+        widget.panel.rows != old.panel.rows ||
+        (s.kind == SceneKind.text
+            ? s.text != o.text || s.bold != o.bold
+            : s.image != o.image ||
+                  s.imageThreshold != o.imageThreshold ||
+                  s.imageColorMode != o.imageColorMode);
+    if (contentChanged) _rasterize();
+    if (s.direction != o.direction) {
+      _scroll = 0;
+      _passes = 0;
     }
-    if (s.direction != o.direction) _scroll = 0;
   }
 
   Future<void> _rasterize() async {
     final request = ++_rasterRequest;
-    final s = widget.settings;
-    final bitmap = await rasterizeText(s.text, rows: s.rows, bold: s.bold);
-    // Drop stale results when the text changed again while rendering.
-    if (!mounted || request != _rasterRequest) return;
+    final s = widget.scene;
+    final rows = widget.panel.rows;
+    final image = s.image;
+    final DotBitmap bitmap;
+    if (s.kind == SceneKind.image) {
+      bitmap = image == null
+          ? DotBitmap.empty(rows)
+          : await rasterizeImage(
+              image,
+              rows: rows,
+              threshold: s.imageThreshold,
+              keepColors: s.imageColorMode == ImageColorMode.original,
+            );
+    } else {
+      bitmap = await rasterizeText(s.text, rows: rows, bold: s.bold);
+    }
+    // Drop stale results when the content changed again while rendering.
+    if (!mounted || request != _rasterRequest) {
+      bitmap.dispose();
+      return;
+    }
+    final old = _bitmap;
     setState(() => _bitmap = bitmap);
+    // Release the old image after the frame that stops painting it.
+    if (old != null) {
+      SchedulerBinding.instance.addPostFrameCallback((_) => old.dispose());
+    }
   }
 
   void _onTick(Duration elapsed) {
@@ -65,8 +105,20 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
     _lastTick = elapsed;
     if (widget.paused) return;
     _seconds += dt;
-    _scroll += dt * widget.settings.speed;
+    _scroll += dt * widget.scene.speed;
     _frame.value = DotFrame(scroll: _scroll, seconds: _seconds);
+
+    final bitmap = _bitmap;
+    final onPass = widget.onPass;
+    if (onPass != null &&
+        bitmap != null &&
+        widget.scene.direction != MarqueeDirection.none) {
+      final passes = (_scroll / (bitmap.width + _columns)).floor();
+      if (passes > _passes) {
+        _passes = passes;
+        onPass(passes);
+      }
+    }
   }
 
   @override
@@ -74,17 +126,27 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
     PaintingBinding.instance.systemFonts.removeListener(_rasterize);
     _ticker.dispose();
     _frame.dispose();
+    _bitmap?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final s = widget.settings;
-    final bitmap = _bitmap ?? DotBitmap.empty(s.rows);
+    final bitmap = _bitmap ?? DotBitmap.empty(widget.panel.rows);
     return RepaintBoundary(
-      child: CustomPaint(
-        painter: DotMatrixPainter(bitmap: bitmap, settings: s, frame: _frame),
-        child: const SizedBox.expand(),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          _columns = columnsFor(constraints.biggest, widget.panel.rows);
+          return CustomPaint(
+            painter: DotMatrixPainter(
+              bitmap: bitmap,
+              scene: widget.scene,
+              panel: widget.panel,
+              frame: _frame,
+            ),
+            child: const SizedBox.expand(),
+          );
+        },
       ),
     );
   }

@@ -1,6 +1,11 @@
 import 'package:dotty/dot_matrix/dot_bitmap.dart';
 import 'package:dotty/dot_matrix/dot_matrix_painter.dart';
-import 'package:dotty/models/display_settings.dart';
+import 'package:dotty/models/show.dart';
+
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
+import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -50,6 +55,43 @@ void main() {
       ];
       expect(litRows.first, lessThanOrEqualTo(1));
       expect(litRows.last, greaterThanOrEqualTo(10));
+    });
+  });
+
+  testWidgets('images rasterize to dots with their colors', (tester) async {
+    await tester.runAsync(() async {
+      // 8x4 image: left half red, right half transparent.
+      final recorder = ui.PictureRecorder();
+      Canvas(recorder).drawRect(
+        const Rect.fromLTWH(0, 0, 4, 4),
+        Paint()..color = const Color(0xFFFF0000),
+      );
+      final img = await recorder.endRecording().toImage(8, 4);
+      final png = (await img.toByteData(format: ui.ImageByteFormat.png))!;
+      final normalized = await normalizeImportedImage(png.buffer.asUint8List());
+      expect(normalized, isNotNull);
+
+      final bmp = await rasterizeImage(
+        normalized!,
+        rows: 8,
+        threshold: 0.1,
+        keepColors: true,
+      );
+      expect(bmp.rows, 8);
+      expect(bmp.width, 16, reason: 'scaled to 8 rows, aspect kept');
+      expect(bmp.isOn(2, 4), isTrue);
+      expect(bmp.isOn(12, 4), isFalse);
+      expect(bmp.colors, isNotNull);
+      bmp.dispose();
+
+      final dark = await rasterizeImage(
+        normalized,
+        rows: 8,
+        threshold: 0.9,
+        keepColors: false,
+      );
+      expect(dark.litCount, 0, reason: 'red is below 90% luminance');
+      expect(await normalizeImportedImage(Uint8List(10)), isNull);
     });
   });
 }

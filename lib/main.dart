@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 
-import 'models/settings_store.dart';
+import 'models/show_store.dart';
 import 'platform/screen_mode.dart';
 import 'screens/home_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initWindow();
-  final store = await SettingsStore.load();
+  final store = await ShowStore.load();
   runApp(DottyApp(store: store));
 }
 
 class DottyApp extends StatelessWidget {
   const DottyApp({super.key, required this.store});
 
-  final SettingsStore store;
+  final ShowStore store;
 
   @override
   Widget build(BuildContext context) {

@@ -3,7 +3,15 @@
   "framework": null,
   "installCommand": "true",
   "buildCommand": "bash scripts/vercel-build.sh",
-  "outputDirectory": "build/web",
+  "outputDirectory": "build/site",
+  "trailingSlash": true,
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "/dotty/",
+      "permanent": false
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
@@ -19,7 +27,7 @@
       ]
     },
     {
-      "source": "/",
+      "source": "/dotty/",
       "headers": [
         {
           "key": "Cache-Control",
@@ -28,7 +36,7 @@
       ]
     },
     {
-      "source": "/(index\\.html|flutter_service_worker\\.js|flutter_bootstrap\\.js|main\\.dart\\.js|version\\.json|manifest\\.json)",
+      "source": "/dotty/(index\\.html|flutter_service_worker\\.js|flutter_bootstrap\\.js|main\\.dart\\.js|version\\.json|manifest\\.json)",
       "headers": [
         {
           "key": "Cache-Control",
@@ -37,7 +45,7 @@
       ]
     },
     {
-      "source": "/(canvaskit|assets|icons)/(.*)",
+      "source": "/dotty/(canvaskit|assets|icons)/(.*)",
       "headers": [
         {
           "key": "Cache-Control",

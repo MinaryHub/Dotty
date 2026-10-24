@@ -5,27 +5,37 @@ Flutter로 만들어 하나의 코드로 **웹(Vercel) · Windows · macOS · Li
 
 ## 기능
 
-- **문구 표시**: 한글, 영문, 숫자, 기호 등 시스템 글꼴로 그릴 수 있는 글자는 모두 도트로 변환
-- **스크롤**: 왼쪽 / 오른쪽 / 고정, 속도 1–120칸/초
-- **색상**: 점 색상(프리셋 + 색조 슬라이더), 무지개 효과, 배경 색상
-- **도트 모양**: 해상도(세로 8–64점), 점 크기, 원형/사각형, 꺼진 점 밝기, 빛 번짐(글로우)
-- **효과**: 깜빡임(0.5–8 Hz), 굵은 글씨
-- **전체 화면 모드**: 화면 꺼짐 방지, 데스크톱은 창 전체 화면, Android는 몰입 모드
+- **여러 장면 + 순차 재생**: 장면을 원하는 만큼 만들고 순서대로 자동 전환, 끝나면 처음부터 반복
+  - 장면 목록에서 선택 · 길게 눌러 끌어서 순서 변경 · 메뉴로 이동/복제/삭제
+  - 다음 장면으로 넘어가는 시점: **스크롤 N회 완료 후** 또는 **N초 후**
+  - 장면이 나타나는 효과: 바로 / 페이드 / 옆으로 밀기 / 위로 밀기 (도트 단위로 이동)
+  - 상단 **연속 재생** 버튼으로 편집 화면에서도 전체 흐름 미리보기
+- **문구 장면**: 한글, 영문, 숫자, 기호 등 글꼴로 그릴 수 있는 글자는 모두 도트로 변환
+- **이미지 장면**: PNG · JPG · GIF · WebP 파일을 도트로 변환
+  - **원본 색**(점마다 이미지 색) 또는 **단색**(장면 점 색상) 모드
+  - 밝기 기준으로 어두운 부분은 꺼진 점으로 처리
+- **장면별 설정**: 점 색상(프리셋 + 색조), 무지개 효과, 스크롤 방향/속도, 깜빡임, 굵은 글씨
+- **패널 공통 설정**: 해상도(세로 8–64점), 점 크기, 원형/사각형, 꺼진 점 밝기, 빛 번짐, 배경, 전환 시간
+- **전체 화면 모드**: 화면 꺼짐 방지, 데스크톱은 창 전체 화면, 웹은 브라우저 전체 화면, Android는 몰입 모드
   - 화면 탭: 버튼 표시/숨김 · `Esc`: 나가기 · `Space`: 일시정지
-- 설정은 자동 저장되어 다음 실행 때 그대로 복원됩니다.
+- 모든 장면과 설정(이미지 포함)은 자동 저장되어 다음 실행 때 그대로 복원됩니다.
+  웹은 브라우저 저장소에 저장되므로 기기·브라우저마다 따로 저장됩니다.
 
-## 웹 배포 (Vercel)
+## 웹 배포 (Vercel) — apps.kimserv.com/dotty
 
-저장소에 `vercel.json`이 들어 있어 별도 설정 없이 배포됩니다.
+저장소의 `vercel.json`과 `scripts/vercel-build.sh`로 배포됩니다.
 
-1. [vercel.com/new](https://vercel.com/new)에서 이 GitHub 저장소를 Import
-2. Framework Preset은 **Other** 그대로 두고 **Deploy**
-   - 빌드 명령(`scripts/vercel-build.sh`)이 Flutter SDK를 받아 `flutter build web`을 실행하고
-     `build/web`을 배포합니다. 빌드는 2–3분 정도 걸립니다.
-   - Flutter 버전을 바꾸려면 Vercel 프로젝트 환경 변수 `FLUTTER_VERSION`을 설정하세요.
+- 빌드 스크립트가 Flutter SDK를 받아 `flutter build web --base-href /dotty/`로 빌드하고
+  결과를 `build/site/dotty/`에 배치합니다. 사이트 루트(`/`)는 `/dotty/`로 이동합니다.
+- 다른 경로에 올리려면 Vercel 환경 변수 `DOTTY_BASE_PATH`(예: `/sign/`)를 설정하세요.
+- Flutter 버전은 환경 변수 `FLUTTER_VERSION`으로 바꿀 수 있습니다.
 
-이후 브랜치에 push하면 Vercel이 자동으로 미리보기/프로덕션 배포를 합니다.
-웹 버전은 PWA로 설치할 수 있고, 전체 화면 버튼은 브라우저 전체 화면을 사용합니다.
+**도메인 연결**: `apps.kimserv.com`을 Vercel 프로젝트 도메인으로 추가한 뒤, DNS(Google Cloud DNS)에
+다음 레코드를 추가하세요.
+
+| 이름 | 종류  | 값                      |
+|------|-------|-------------------------|
+| apps | CNAME | `cname.vercel-dns.com.` |
 
 로컬에서 웹으로 실행하기:
 
@@ -66,14 +76,16 @@ GitHub Actions(`.github/workflows/build.yml`)가 push / PR마다 테스트를 �
 ```
 lib/
   main.dart                       앱 진입점
-  models/display_settings.dart    설정 값 + JSON 직렬화
-  models/settings_store.dart      설정 상태 관리 및 저장
-  dot_matrix/dot_bitmap.dart      문구 → 도트 비트맵 변환
-  dot_matrix/dot_matrix_painter.dart  도트 렌더링 (스크롤/깜빡임/무지개/글로우)
-  dot_matrix/dot_matrix_display.dart  애니메이션 위젯
-  screens/home_screen.dart        미리보기 + 설정 화면
-  screens/settings_panel.dart     설정 패널
+  models/show.dart                쇼(패널 + 장면 목록) 데이터 + JSON 직렬화
+  models/show_store.dart          쇼 상태 관리 및 저장
+  dot_matrix/dot_bitmap.dart      문구/이미지 → 도트 비트맵 변환
+  dot_matrix/dot_matrix_painter.dart  도트 렌더링 (스크롤/깜빡임/무지개/이미지 색/글로우)
+  dot_matrix/dot_matrix_display.dart  한 장면 애니메이션 위젯
+  dot_matrix/show_player.dart     장면 순차 재생 + 전환 효과
+  screens/home_screen.dart        미리보기 + 장면 목록 + 편집 화면
+  screens/editor/                 장면 목록, 장면 편집, 패널 편집
   screens/sign_screen.dart        전체 화면 전광판
+  platform/image_import.dart      이미지 파일 선택
   platform/screen_mode.dart       창/브라우저 전체 화면, 화면 꺼짐 방지
 web/                              웹 진입점, PWA manifest, 아이콘
 vercel.json, scripts/vercel-build.sh  Vercel 배포 설정
