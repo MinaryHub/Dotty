@@ -34,7 +34,7 @@ class PanelSettings {
     this.flipSound = true,
     this.soundVolume = 0.6,
     this.aspectRatio = 0,
-    this.flipSeconds = 0.19,
+    this.flipSeconds = 0.5,
   });
 
   /// Vertical resolution in dots.
@@ -128,10 +128,16 @@ class PanelSettings {
       flipSound: r.boolean('flipSound', d.flipSound),
       soundVolume: r.number('soundVolume', d.soundVolume).clamp(0, 1),
       aspectRatio: r.number('aspectRatio', d.aspectRatio).clamp(0, 8),
-      flipSeconds: r.number('flipSeconds', d.flipSeconds).clamp(0.08, 1.5),
+      flipSeconds: _migrateFlipSeconds(r.number('flipSeconds', d.flipSeconds))
+          .clamp(0.08, 1.5),
     );
   }
 }
+
+/// 0.19 s was the default before discs were drawn turning in 3D; it read as
+/// a blink. Saves still holding it get the current default.
+double _migrateFlipSeconds(double v) =>
+    (v - 0.19).abs() < 1e-9 ? const PanelSettings().flipSeconds : v;
 
 /// One step of the show: what is displayed, how it looks and moves, and how
 /// long it stays.

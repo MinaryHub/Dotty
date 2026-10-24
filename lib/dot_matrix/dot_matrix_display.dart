@@ -225,7 +225,13 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
           };
     }
 
-    _board.timeScale = widget.panel.flipSeconds / FlipBoard.flipSeconds;
+    // While text scrolls, discs flip every column step; keep each turn
+    // shorter than a step so the text stays readable.
+    var flipSeconds = widget.panel.flipSeconds;
+    if (look.direction != MarqueeDirection.none && look.speed > 0) {
+      flipSeconds = math.min(flipSeconds, 0.9 / look.speed);
+    }
+    _board.timeScale = flipSeconds / FlipBoard.flipSeconds;
     final sound = widget.sound && widget.panel.flipSound;
     final buckets = <int, int>{};
     _board.update(
@@ -243,7 +249,9 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
     );
     if (buckets.isNotEmpty) {
       final player = FlipSound.instance..volume = widget.panel.soundVolume;
-      buckets.forEach((b, count) => player.click(count, b * 0.01));
+      // Discs click when they land on their stop, at the end of the turn.
+      final landing = FlipBoard.turnSeconds * _board.timeScale;
+      buckets.forEach((b, count) => player.click(count, b * 0.01 + landing));
     }
   }
 

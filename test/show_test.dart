@@ -85,4 +85,10 @@ void main() {
     expect(store.value.scenes, hasLength(1), reason: 'never empty');
     store.dispose();
   });
+
+  test('the old blink-fast flip time is upgraded, chosen times kept', () {
+    PanelSettings flip(double v) => PanelSettings.fromJson({'flipSeconds': v});
+    expect(flip(0.19).flipSeconds, const PanelSettings().flipSeconds);
+    expect(flip(0.3).flipSeconds, 0.3);
+  });
 }
