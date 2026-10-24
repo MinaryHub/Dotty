@@ -121,12 +121,14 @@ void _drawChar(_Canvas canvas, String ch, int x, int top, _Metrics m) {
 /// (with a small margin), as large as fits [maxWidth] columns. Digits stay
 /// crisp at sizes where a regular font would smear, like a real dot-matrix
 /// clock. The 오전/오후 of [ClockFormat.hm12] is set in the system font.
+/// With [colonOn] false the colons are left dark (for a blinking colon).
 Future<DotBitmap> rasterizeClock(
   DateTime time,
   ClockFormat format, {
   required int rows,
   int? maxWidth,
   bool bold = true,
+  bool colonOn = true,
 }) async {
   final full = formatClock(time, format);
   // The Hangul half-day label is drawn separately; the rest is digits.
@@ -175,8 +177,16 @@ Future<DotBitmap> rasterizeClock(
   }
   for (var i = 0; i < digits.length; i++) {
     if (i > 0) x += metrics.gap;
-    _drawChar(canvas, digits[i], x, top, metrics);
+    // A blinking colon keeps its place, so nothing shifts while it's off.
+    if (colonOn || digits[i] != ':') {
+      _drawChar(canvas, digits[i], x, top, metrics);
+    }
     x += metrics.widthOf(digits[i]);
   }
   return DotBitmap(width, rows, canvas.bits);
 }
+
+/// Whether a clock in [format] shows its colons at [time]: formats without
+/// seconds blink them once a second, so the clock visibly ticks.
+bool clockColonOn(DateTime time, ClockFormat format) =>
+    format == ClockFormat.hms || time.millisecond < 500;

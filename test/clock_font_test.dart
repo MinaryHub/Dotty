@@ -62,4 +62,22 @@ void main() {
       expect(withLabel.litCount, greaterThan(0));
     });
   });
+
+  test('the colon blinks each second unless seconds are shown', () async {
+    final early = DateTime(2026, 10, 24, 20, 8, 18, 100);
+    final late = DateTime(2026, 10, 24, 20, 8, 18, 700);
+    expect(clockColonOn(early, ClockFormat.hm), isTrue);
+    expect(clockColonOn(late, ClockFormat.hm), isFalse);
+    expect(clockColonOn(late, ClockFormat.hms), isTrue);
+
+    final on = await rasterizeClock(early, ClockFormat.hm, rows: 16);
+    final off = await rasterizeClock(
+      late,
+      ClockFormat.hm,
+      rows: 16,
+      colonOn: false,
+    );
+    expect(off.width, on.width, reason: 'digits stay put');
+    expect(off.litCount, lessThan(on.litCount));
+  });
 }

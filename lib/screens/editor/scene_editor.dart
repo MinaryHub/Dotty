@@ -286,11 +286,13 @@ class _SceneEditorState extends State<SceneEditor> {
     LabeledSlider(
       label: '속도',
       value: s.speed,
-      min: 1,
+      min: 0,
       max: 120,
-      display: (v) => '${v.round()} 칸/초',
-      onChanged: (v) => _update((s) => s.copyWith(speed: v)),
+      display: (v) => v.round() == 0 ? '0 (멈춤)' : '${v.round()} 칸/초',
+      onChanged: (v) => _update((s) => s.copyWith(speed: v.roundToDouble())),
     ),
+    if (s.speed <= 0 && s.direction != MarqueeDirection.none)
+      const Hint('속도 0: 글자가 흐르지 않고 가운데에 멈춰 있습니다.'),
     if (s.direction == MarqueeDirection.none)
       const Hint('고정이라도 화면보다 긴 글자는 잘리지 않도록 이 속도로 흐릅니다.'),
     SwitchListTile(

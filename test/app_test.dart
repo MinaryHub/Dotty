@@ -1,4 +1,5 @@
 import 'package:dotty/dot_matrix/dot_matrix_display.dart';
+import 'package:dotty/dot_matrix/dot_matrix_painter.dart';
 import 'package:dotty/dot_matrix/show_player.dart';
 import 'package:dotty/main.dart';
 import 'package:dotty/models/show.dart';
@@ -238,5 +239,30 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(signPlayer().soloSceneId, isNull);
     await tester.pump(const Duration(seconds: 4));
+  });
+
+  testWidgets('speed 0 stands the text still, centered', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: DotMatrixDisplay(
+          scene: Scene(id: 's', text: 'HI', speed: 0),
+          panel: PanelSettings(),
+          columns: 40,
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    final painter =
+        tester
+                .widget<CustomPaint>(
+                  find.descendant(
+                    of: find.byType(DotMatrixDisplay),
+                    matching: find.byType(CustomPaint),
+                  ),
+                )
+                .painter!
+            as DotMatrixPainter;
+    expect(painter.scene.direction, MarqueeDirection.none);
+    expect(const Scene(id: 's', speed: 0).usesPasses, isFalse);
   });
 }

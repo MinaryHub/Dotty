@@ -94,6 +94,13 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
   /// rather than showing only its middle.
   Scene get _look {
     final look = _showingCurrent ? widget.scene : _shown;
+    // Speed 0 means standing still: show the content centered rather than
+    // frozen at its scroll start (off screen).
+    if (look.speed <= 0) {
+      return look.direction == MarqueeDirection.none
+          ? look
+          : look.copyWith(direction: MarqueeDirection.none);
+    }
     final bitmap = _bitmap;
     // (A still thumbnail keeps the centered view instead.)
     if (look.direction == MarqueeDirection.none &&
@@ -151,13 +158,14 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
     final DotBitmap bitmap;
     if (s.kind == SceneKind.clock) {
       final time = now();
-      _clockText = formatClock(time, s.clockFormat);
+      _clockText = _clockKey(time, s.clockFormat);
       bitmap = await rasterizeClock(
         time,
         s.clockFormat,
         rows: rows,
         maxWidth: widget.columns,
         bold: s.bold,
+        colonOn: clockColonOn(time, s.clockFormat),
       );
     } else if (s.kind == SceneKind.image) {
       bitmap = image == null
@@ -208,12 +216,15 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
     _lastTick = elapsed;
     if (widget.paused) return;
     final look = _look;
-    // A clock redraws when the shown time changes (the board then flips
-    // just the discs of the digits that changed).
-    if (widget.scene.kind == SceneKind.clock &&
-        formatClock(now(), widget.scene.clockFormat) != _clockText) {
-      _clockText = formatClock(now(), widget.scene.clockFormat);
-      _rasterize();
+    // A clock redraws whenever what it shows changes: every second, the
+    // seconds or the blinking colon (a flip board then turns just those
+    // discs).
+    if (widget.scene.kind == SceneKind.clock) {
+      final key = _clockKey(now(), widget.scene.clockFormat);
+      if (key != _clockText) {
+        _clockText = key;
+        _rasterize();
+      }
     }
     _seconds += dt;
     _scroll += dt * look.speed;
@@ -288,6 +299,10 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
     if (look.blink) {
       flipSeconds = math.min(flipSeconds, 0.9 / (2 * look.blinkHz));
     }
+    // A clock's colon blinks every half second.
+    if (look.kind == SceneKind.clock) {
+      flipSeconds = math.min(flipSeconds, 0.4);
+    }
     _board.timeScale = flipSeconds / FlipBoard.flipSeconds;
     final sound = widget.sound && widget.panel.flipSound;
     final buckets = <int, int>{};
@@ -311,6 +326,9 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
       buckets.forEach((b, count) => player.click(count, b * 0.01 + landing));
     }
   }
+
+  static String _clockKey(DateTime time, ClockFormat format) =>
+      '${formatClock(time, format)}|${clockColonOn(time, format)}';
 
   /// Stable pseudo-random 0..1 per disc (same on every platform, unlike
   /// integer hashing, which overflows differently on the web).
