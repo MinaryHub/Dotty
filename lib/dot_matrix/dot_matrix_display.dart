@@ -204,9 +204,12 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
     _pendingWave = null;
     final span = widget.panel.transitionMs / 1000 * 1.2;
     double delayOf(int c, int r) {
-      // A few ms of scatter per disc, like real coils firing.
+      // The driver scans the board column by column, and each coil fires
+      // with a few ms of scatter.
+      final scan = c * 0.0008;
       final jitter = _hash(c, r, 1) * 0.025;
-      return jitter +
+      return scan +
+          jitter +
           switch (wave) {
             null || SceneTransition.cut => 0,
             SceneTransition.fade => _hash(c, r, 2) * span,
@@ -261,6 +264,12 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
       child: LayoutBuilder(
         builder: (context, constraints) {
           _columns = columnsFor(constraints.biggest, widget.panel.rows);
+          // Set up the discs right away (silently) so still displays, like
+          // scene thumbnails, show them too.
+          if (widget.panel.flipDots &&
+              (_board.cols != _columns || _board.rows != widget.panel.rows)) {
+            _updateBoard(_look);
+          }
           return CustomPaint(
             painter: DotMatrixPainter(
               bitmap: bitmap,
@@ -269,6 +278,7 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
               frame: _frame,
               flip: widget.flip,
               board: widget.panel.flipDots ? _board : null,
+              pixelRatio: MediaQuery.maybeDevicePixelRatioOf(context) ?? 1,
             ),
             child: const SizedBox.expand(),
           );
