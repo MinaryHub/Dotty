@@ -14,12 +14,14 @@ double signAspect(BuildContext context, PanelSettings panel) {
   if (size.isEmpty) return 16 / 9;
   final long = math.max(size.width, size.height);
   final short = math.min(size.width, size.height);
-  // Phones and tablets turn: follow how the device is held right now.
-  final mobile =
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.iOS);
-  if (mobile) {
+  // Phones and tablets turn: follow how the device is held right now. In a
+  // browser the screen size may not turn with the device (iOS Safari keeps
+  // reporting portrait), so the page's own orientation decides there too.
+  final turns =
+      kIsWeb ||
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
+  if (turns) {
     final portrait = MediaQuery.orientationOf(context) == Orientation.portrait;
     return portrait ? short / long : long / short;
   }
