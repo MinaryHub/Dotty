@@ -1,11 +1,21 @@
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../models/show.dart';
+import '../sound/flip_sound.dart';
 import 'dot_bitmap.dart';
 import 'dot_matrix_painter.dart';
+import 'flip_board.dart';
 
-/// An animated LED dot-matrix panel showing one [scene].
+/// An animated dot-matrix panel showing one [scene], as LEDs or as a
+/// mechanical flip-dot board ([PanelSettings.flipDots]).
+///
+/// On a flip-dot board, giving the same display a different scene (or a new
+/// [entry] of it) flips the discs over to the new content in the pattern of
+/// the scene's [Scene.transition].
 class DotMatrixDisplay extends StatefulWidget {
   const DotMatrixDisplay({
     super.key,
@@ -14,6 +24,8 @@ class DotMatrixDisplay extends StatefulWidget {
     this.paused = false,
     this.onPass,
     this.flip,
+    this.entry = 0,
+    this.sound = false,
   });
 
   final Scene scene;
@@ -26,6 +38,12 @@ class DotMatrixDisplay extends StatefulWidget {
 
   /// Set while this scene takes part in a flip transition.
   final FlipState? flip;
+
+  /// Distinguishes repeated plays of the same scene.
+  final int entry;
+
+  /// Whether flipping discs click (flip-dot boards only).
+  final bool sound;
 
   @override
   State<DotMatrixDisplay> createState() => _DotMatrixDisplayState();
@@ -44,6 +62,23 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
   double _seconds = 0;
   int _passes = 0;
 
+  /// The scene whose content [_bitmap] holds. It lags [DotMatrixDisplay.scene]
+  /// while a newly given scene is being rasterized, so the board keeps
+  /// showing the old one instead of going blank.
+  late Scene _shown = widget.scene;
+  late int _shownEntry = widget.entry;
+
+  final _board = FlipBoard();
+
+  /// Transition to play on the board's next update after a scene change.
+  SceneTransition? _pendingWave;
+
+  bool get _showingCurrent =>
+      _shown.id == widget.scene.id && _shownEntry == widget.entry;
+
+  /// Look and motion come from the latest settings of the shown scene.
+  Scene get _look => _showingCurrent ? widget.scene : _shown;
+
   @override
   void initState() {
     super.initState();
@@ -59,6 +94,8 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
     super.didUpdateWidget(old);
     final s = widget.scene, o = old.scene;
     final contentChanged =
+        s.id != o.id ||
+        widget.entry != old.entry ||
         s.kind != o.kind ||
         widget.panel.rows != old.panel.rows ||
         (s.kind == SceneKind.text
@@ -67,7 +104,7 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
                   s.imageThreshold != o.imageThreshold ||
                   s.imageColorMode != o.imageColorMode);
     if (contentChanged) _rasterize();
-    if (s.direction != o.direction) {
+    if (s.direction != o.direction && _showingCurrent) {
       _scroll = 0;
       _passes = 0;
     }
@@ -76,6 +113,7 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
   Future<void> _rasterize() async {
     final request = ++_rasterRequest;
     final s = widget.scene;
+    final entry = widget.entry;
     final rows = widget.panel.rows;
     final image = s.image;
     final DotBitmap bitmap;
@@ -97,7 +135,17 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
       return;
     }
     final old = _bitmap;
-    setState(() => _bitmap = bitmap);
+    setState(() {
+      _bitmap = bitmap;
+      if (s.id != _shown.id || entry != _shownEntry) {
+        // A different scene takes over: start it from the beginning.
+        _scroll = 0;
+        _passes = 0;
+        _pendingWave = s.transition;
+      }
+      _shown = s;
+      _shownEntry = entry;
+    });
     // Release the old image after the frame that stops painting it.
     if (old != null) {
       SchedulerBinding.instance.addPostFrameCallback((_) => old.dispose());
@@ -108,21 +156,93 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
     final dt = (elapsed - _lastTick).inMicroseconds / 1e6;
     _lastTick = elapsed;
     if (widget.paused) return;
+    final look = _look;
     _seconds += dt;
-    _scroll += dt * widget.scene.speed;
+    _scroll += dt * look.speed;
+    if (widget.panel.flipDots) _updateBoard(look);
     _frame.value = DotFrame(scroll: _scroll, seconds: _seconds);
 
     final bitmap = _bitmap;
     final onPass = widget.onPass;
     if (onPass != null &&
         bitmap != null &&
-        widget.scene.direction != MarqueeDirection.none) {
+        _showingCurrent &&
+        look.direction != MarqueeDirection.none) {
       final passes = (_scroll / (bitmap.width + _columns)).floor();
       if (passes > _passes) {
         _passes = passes;
         onPass(passes);
       }
     }
+  }
+
+  /// Points the discs at the faces this frame should show; changed ones
+  /// start turning (and clicking).
+  void _updateBoard(Scene look) {
+    final bitmap = _bitmap;
+    final rows = widget.panel.rows;
+    final cols = _columns;
+    if (bitmap == null || bitmap.rows != rows) return;
+    final lit = !look.blink || ((_seconds * look.blinkHz * 2).floor() % 2 == 0);
+    final shift = sourceColumn(
+      screenColumn: 0,
+      screenColumns: cols,
+      bitmapWidth: bitmap.width,
+      scroll: _scroll,
+      direction: look.direction,
+    );
+    final target = Uint8List(cols * rows);
+    if (lit) {
+      for (var r = 0; r < rows; r++) {
+        for (var c = 0; c < cols; c++) {
+          if (bitmap.isOn(c + shift, r)) target[r * cols + c] = 1;
+        }
+      }
+    }
+
+    final wave = _pendingWave;
+    _pendingWave = null;
+    final span = widget.panel.transitionMs / 1000 * 1.2;
+    double delayOf(int c, int r) {
+      // A few ms of scatter per disc, like real coils firing.
+      final jitter = _hash(c, r, 1) * 0.025;
+      return jitter +
+          switch (wave) {
+            null || SceneTransition.cut => 0,
+            SceneTransition.fade => _hash(c, r, 2) * span,
+            SceneTransition.slideUp =>
+              (rows - 1 - r) / math.max(1, rows - 1) * span * 0.7,
+            SceneTransition.slideLeft ||
+            SceneTransition.flip => c / math.max(1, cols - 1) * span,
+          };
+    }
+
+    final sound = widget.sound && widget.panel.flipSound;
+    final buckets = <int, int>{};
+    _board.update(
+      target,
+      cols,
+      rows,
+      _seconds,
+      delayOf: delayOf,
+      onFlip: sound
+          ? (delay) {
+              final b = (delay / 0.01).floor();
+              buckets[b] = (buckets[b] ?? 0) + 1;
+            }
+          : null,
+    );
+    if (buckets.isNotEmpty) {
+      final player = FlipSound.instance..volume = widget.panel.soundVolume;
+      buckets.forEach((b, count) => player.click(count, b * 0.01));
+    }
+  }
+
+  /// Stable pseudo-random 0..1 per disc (same on every platform, unlike
+  /// integer hashing, which overflows differently on the web).
+  static double _hash(int c, int r, int salt) {
+    final v = math.sin(c * 12.9898 + r * 78.233 + salt * 37.719) * 43758.5453;
+    return v - v.floorToDouble();
   }
 
   @override
@@ -144,10 +264,11 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
           return CustomPaint(
             painter: DotMatrixPainter(
               bitmap: bitmap,
-              scene: widget.scene,
+              scene: _look,
               panel: widget.panel,
               frame: _frame,
               flip: widget.flip,
+              board: widget.panel.flipDots ? _board : null,
             ),
             child: const SizedBox.expand(),
           );

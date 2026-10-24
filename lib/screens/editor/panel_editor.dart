@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/show.dart';
 import '../../models/show_store.dart';
+import '../../sound/flip_sound.dart';
 import 'controls.dart';
 
 /// Edits the settings shared by all scenes: the sign's dot grid and look.
@@ -21,6 +22,45 @@ class PanelEditor extends StatelessWidget {
         return ListView(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
           children: [
+            const SectionHeader('표시 방식'),
+            ChoiceRow<bool>(
+              options: const [
+                (false, Icons.lightbulb_outline, 'LED'),
+                (true, Icons.flip, '플립 도트'),
+              ],
+              selected: p.flipDots,
+              onSelected: (v) {
+                FlipSound.instance.unlock();
+                update((p) => p.copyWith(flipDots: v));
+              },
+            ),
+            Hint(
+              p.flipDots
+                  ? '실제 플립 도트 전광판처럼 바뀌는 점만 하나씩 뒤집힙니다. '
+                        '장면 전환 효과에 따라 뒤집히는 순서가 달라집니다.'
+                  : '빛나는 LED 전광판입니다.',
+            ),
+            if (p.flipDots) ...[
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('뒤집히는 소리'),
+                value: p.flipSound,
+                onChanged: (v) {
+                  FlipSound.instance.unlock();
+                  update((p) => p.copyWith(flipSound: v));
+                },
+              ),
+              LabeledSlider(
+                label: '음량',
+                value: p.soundVolume,
+                min: 0,
+                max: 1,
+                display: (v) => '${(v * 100).round()}%',
+                onChanged: p.flipSound
+                    ? (v) => update((p) => p.copyWith(soundVolume: v))
+                    : null,
+              ),
+            ],
             const SectionHeader('도트'),
             LabeledSlider(
               label: '해상도 (세로 점 수)',
@@ -56,12 +96,13 @@ class PanelEditor extends StatelessWidget {
               selected: p.shape,
               onSelected: (v) => update((p) => p.copyWith(shape: v)),
             ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('빛 번짐 (글로우)'),
-              value: p.glow,
-              onChanged: (v) => update((p) => p.copyWith(glow: v)),
-            ),
+            if (!p.flipDots)
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('빛 번짐 (글로우)'),
+                value: p.glow,
+                onChanged: (v) => update((p) => p.copyWith(glow: v)),
+              ),
             const SectionHeader('배경'),
             ColorSwatches(
               colors: backgroundColors,

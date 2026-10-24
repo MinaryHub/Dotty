@@ -11,6 +11,14 @@ Flutter로 만들어 하나의 코드로 **웹(Vercel) · Windows · macOS · Li
   - 장면이 나타나는 효과: 바로 / 페이드 / 옆으로 밀기 / 위로 밀기 (도트 단위로 이동) /
     **플립** (플립 도트 전광판처럼 모든 점이 왼쪽부터 물결치듯 뒤집히며 바뀜)
   - 상단 **연속 재생** 버튼으로 편집 화면에서도 전체 흐름 미리보기
+- **표시 방식: LED / 플립 도트**
+  - **플립 도트**: 실제 기계식 플립 도트 전광판처럼 원판(점)이 바뀔 때만 하나씩 뒤집힙니다.
+    스크롤·깜빡임·편집·장면 전환 모두 점이 뒤집히며 바뀌고, 장면 전환 효과에 따라
+    뒤집히는 순서가 달라집니다 (옆으로 밀기·플립: 왼쪽부터 물결, 위로 밀기: 아래에서 위로,
+    페이드: 무작위로 흩어지듯, 바로: 한꺼번에).
+  - **뒤집히는 소리**: 원판이 자석에 부딪히는 "딱" 소리를 합성해, 뒤집히는 점마다 그 순간에
+    맞춰 재생합니다. 한 점은 "틱", 화면 전체가 바뀔 때는 "촤르륵" 하는 소리. 음량 조절 가능.
+    (웹은 첫 탭/클릭 이후 소리가 납니다 — 브라우저 정책)
 - **문구 장면**: 한글, 영문, 숫자, 기호 등 글꼴로 그릴 수 있는 글자는 모두 도트로 변환
 - **이미지 장면**: PNG · JPG · GIF · WebP 파일을 도트로 변환
   - **원본 색**(점마다 이미지 색) 또는 **단색**(장면 점 색상) 모드
@@ -66,7 +74,8 @@ flutter run -d windows   # 또는 macos, linux, <android 기기 ID>
 | Linux   | `flutter build linux --release` | `build/linux/x64/release/bundle/`                |
 
 각 데스크톱 빌드는 해당 OS에서만 가능합니다. Linux 빌드에는
-`clang cmake ninja-build pkg-config libgtk-3-dev` 패키지가 필요합니다.
+`clang cmake ninja-build pkg-config libgtk-3-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev`
+패키지가 필요합니다.
 
 GitHub Actions(`.github/workflows/build.yml`)가 push / PR마다 테스트를 돌리고
 다섯 플랫폼 빌드를 모두 만들어 아티팩트로 올립니다.
@@ -85,6 +94,8 @@ lib/
   dot_matrix/dot_matrix_painter.dart  도트 렌더링 (스크롤/깜빡임/무지개/이미지 색/글로우)
   dot_matrix/dot_matrix_display.dart  한 장면 애니메이션 위젯
   dot_matrix/show_player.dart     장면 순차 재생 + 전환 효과
+  dot_matrix/flip_board.dart      플립 도트 원판 상태(점별 뒤집힘 타이밍)
+  sound/                          플립 소리 합성 + 재생 (웹: Web Audio, 앱: audioplayers)
   screens/home_screen.dart        미리보기 + 장면 목록 + 편집 화면
   screens/editor/                 장면 목록, 장면 편집, 패널 편집
   screens/sign_screen.dart        전체 화면 전광판

@@ -76,7 +76,7 @@ class _SignScreenState extends State<SignScreen> {
                 ValueListenableBuilder(
                   valueListenable: widget.store,
                   builder: (context, show, _) =>
-                      ShowPlayer(show: show, paused: _paused),
+                      ShowPlayer(show: show, paused: _paused, sound: true),
                 ),
                 Positioned(
                   top: 0,

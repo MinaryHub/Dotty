@@ -39,6 +39,7 @@ dependencies:
   wakelock_plus: ^1.8.2
   web: ^1.1.2
   file_selector: ^1.1.0
+  audioplayers: ^6.8.1
 
 dev_dependencies:
   flutter_test:

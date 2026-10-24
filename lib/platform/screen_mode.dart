@@ -47,12 +47,22 @@ Future<void> enterSignMode() async {
       () => SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky),
     );
   }
-  await _guard(() => WakelockPlus.enable());
+  // Only once per sign session: wakelock_plus's web code breaks when a
+  // second enable() arrives while the first is pending.
+  if (!_wakeLocked) {
+    _wakeLocked = true;
+    await _guard(() => WakelockPlus.enable());
+  }
   await screen;
 }
 
+bool _wakeLocked = false;
+
 Future<void> exitSignMode() async {
-  await _guard(() => WakelockPlus.disable());
+  if (_wakeLocked) {
+    _wakeLocked = false;
+    await _guard(() => WakelockPlus.disable());
+  }
   if (kIsWeb) {
     await _guard(exitBrowserFullscreen);
   } else if (isDesktop) {

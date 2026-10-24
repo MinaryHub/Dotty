@@ -30,6 +30,9 @@ class PanelSettings {
     this.dotFill = 0.82,
     this.glow = true,
     this.transitionMs = 600,
+    this.flipDots = false,
+    this.flipSound = true,
+    this.soundVolume = 0.6,
   });
 
   /// Vertical resolution in dots.
@@ -45,6 +48,14 @@ class PanelSettings {
   final bool glow;
   final double transitionMs;
 
+  /// Mechanical flip-dot board instead of LEDs: each disc turns over when
+  /// its state changes, with the matching click.
+  final bool flipDots;
+  final bool flipSound;
+
+  /// 0..1.
+  final double soundVolume;
+
   static const minRows = 8;
   static const maxRows = 64;
 
@@ -56,6 +67,9 @@ class PanelSettings {
     double? dotFill,
     bool? glow,
     double? transitionMs,
+    bool? flipDots,
+    bool? flipSound,
+    double? soundVolume,
   }) {
     return PanelSettings(
       rows: rows ?? this.rows,
@@ -65,6 +79,9 @@ class PanelSettings {
       dotFill: dotFill ?? this.dotFill,
       glow: glow ?? this.glow,
       transitionMs: transitionMs ?? this.transitionMs,
+      flipDots: flipDots ?? this.flipDots,
+      flipSound: flipSound ?? this.flipSound,
+      soundVolume: soundVolume ?? this.soundVolume,
     );
   }
 
@@ -76,6 +93,9 @@ class PanelSettings {
     'dotFill': dotFill,
     'glow': glow,
     'transitionMs': transitionMs,
+    'flipDots': flipDots,
+    'flipSound': flipSound,
+    'soundVolume': soundVolume,
   };
 
   factory PanelSettings.fromJson(Map<String, dynamic> json) {
@@ -89,6 +109,9 @@ class PanelSettings {
       dotFill: r.number('dotFill', d.dotFill).clamp(0.2, 1),
       glow: r.boolean('glow', d.glow),
       transitionMs: r.number('transitionMs', d.transitionMs).clamp(100, 3000),
+      flipDots: r.boolean('flipDots', d.flipDots),
+      flipSound: r.boolean('flipSound', d.flipSound),
+      soundVolume: r.number('soundVolume', d.soundVolume).clamp(0, 1),
     );
   }
 }

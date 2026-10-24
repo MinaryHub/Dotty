@@ -122,4 +122,41 @@ void main() {
     // Let the controls' auto-hide timer finish.
     await tester.pump(const Duration(seconds: 4));
   });
+
+  testWidgets('flip-dot board keeps one display and flips to the next scene', (
+    tester,
+  ) async {
+    final show = Show(
+      panel: const PanelSettings(flipDots: true, transitionMs: 100),
+      scenes: [
+        for (final id in ['a', 'b'])
+          Scene(
+            id: id,
+            text: id,
+            direction: MarqueeDirection.none,
+            durationMode: DurationMode.seconds,
+            durationSeconds: 1,
+          ),
+      ],
+    );
+    final changes = <int>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ShowPlayer(show: show, onSceneChanged: changes.add),
+      ),
+    );
+    final board = find.byKey(const ValueKey('flip-board'));
+    final state = tester.state(board);
+    for (var i = 0; i < 80; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(changes, [1]);
+    expect(find.byType(DotMatrixDisplay), findsOneWidget);
+    expect(
+      tester.state(board),
+      same(state),
+      reason: 'same board, not remounted',
+    );
+    expect(tester.widget<DotMatrixDisplay>(board).scene.id, 'b');
+  });
 }
