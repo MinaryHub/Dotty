@@ -7,7 +7,36 @@ enum MarqueeDirection { left, right, none }
 
 enum DotShape { circle, square }
 
-enum SceneKind { text, image }
+enum SceneKind { text, image, clock }
+
+/// How a clock scene shows the current time.
+enum ClockFormat {
+  /// 14:05
+  hm,
+
+  /// 14:05:09
+  hms,
+
+  /// 오후 2:05
+  hm12,
+
+  /// 10/24 14:05
+  dateHm,
+}
+
+/// [time] as a clock scene shows it in [format].
+String formatClock(DateTime time, ClockFormat format) {
+  String two(int v) => v.toString().padLeft(2, '0');
+  final hm = '${two(time.hour)}:${two(time.minute)}';
+  return switch (format) {
+    ClockFormat.hm => hm,
+    ClockFormat.hms => '$hm:${two(time.second)}',
+    ClockFormat.hm12 =>
+      '${time.hour < 12 ? '오전' : '오후'} '
+          '${time.hour % 12 == 0 ? 12 : time.hour % 12}:${two(time.minute)}',
+    ClockFormat.dateHm => '${time.month}/${time.day} $hm',
+  };
+}
 
 /// How image pixels become dots: keep their colors, or light them in the
 /// scene's dot color.
@@ -161,6 +190,7 @@ class Scene {
     this.durationSeconds = 5,
     this.passes = 1,
     this.transition = SceneTransition.fade,
+    this.clockFormat = ClockFormat.hm,
   });
 
   final String id;
@@ -189,6 +219,9 @@ class Scene {
   final int passes;
   final SceneTransition transition;
 
+  /// Time format of a [SceneKind.clock] scene.
+  final ClockFormat clockFormat;
+
   /// Scenes that do not scroll cannot count passes and fall back to seconds.
   bool get usesPasses =>
       durationMode == DurationMode.passes &&
@@ -197,7 +230,7 @@ class Scene {
 
   /// Whether this scene lights dots in its own [dotColor] (vs image colors).
   bool get usesDotColor =>
-      kind == SceneKind.text || imageColorMode == ImageColorMode.mono;
+      kind != SceneKind.image || imageColorMode == ImageColorMode.mono;
 
   Scene copyWith({
     String? id,
@@ -217,6 +250,7 @@ class Scene {
     double? durationSeconds,
     int? passes,
     SceneTransition? transition,
+    ClockFormat? clockFormat,
   }) {
     return Scene(
       id: id ?? this.id,
@@ -236,6 +270,7 @@ class Scene {
       durationSeconds: durationSeconds ?? this.durationSeconds,
       passes: passes ?? this.passes,
       transition: transition ?? this.transition,
+      clockFormat: clockFormat ?? this.clockFormat,
     );
   }
 
@@ -257,6 +292,7 @@ class Scene {
     'durationSeconds': durationSeconds,
     'passes': passes,
     'transition': transition.name,
+    'clockFormat': clockFormat.name,
   };
 
   factory Scene.fromJson(Map<String, dynamic> json, {String? fallbackId}) {
@@ -303,6 +339,11 @@ class Scene {
         'transition',
         d.transition,
       ),
+      clockFormat: r.enumValue(
+        ClockFormat.values,
+        'clockFormat',
+        d.clockFormat,
+      ),
     );
   }
 }
@@ -342,6 +383,16 @@ class Show {
         blink: true,
         durationMode: DurationMode.seconds,
         durationSeconds: 3,
+        transition: SceneTransition.flip,
+      ),
+      // Demo: the current time, live.
+      Scene(
+        id: newSceneId(),
+        kind: SceneKind.clock,
+        dotColor: const Color(0xFF00E5FF),
+        direction: MarqueeDirection.none,
+        durationMode: DurationMode.seconds,
+        durationSeconds: 6,
         transition: SceneTransition.flip,
       ),
     ],

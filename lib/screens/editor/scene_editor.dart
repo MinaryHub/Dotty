@@ -106,6 +106,11 @@ class _SceneEditorState extends State<SceneEditor> {
                   icon: Icon(Icons.image_outlined),
                   label: Text('이미지'),
                 ),
+                ButtonSegment(
+                  value: SceneKind.clock,
+                  icon: Icon(Icons.schedule),
+                  label: Text('시계'),
+                ),
               ],
               selected: {s.kind},
               onSelectionChanged: (v) =>
@@ -114,6 +119,7 @@ class _SceneEditorState extends State<SceneEditor> {
             const SizedBox(height: 12),
             if (s.kind == SceneKind.text) ..._textFields(s),
             if (s.kind == SceneKind.image) ..._imageFields(s),
+            if (s.kind == SceneKind.clock) ..._clockFields(s),
             if (s.usesDotColor) ..._colorFields(s),
             ..._motionFields(s),
             ..._timingFields(s, show),
@@ -145,6 +151,30 @@ class _SceneEditorState extends State<SceneEditor> {
         for (final p in _presets)
           ActionChip(label: Text(p), onPressed: () => _setText(p)),
       ],
+    ),
+    SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      title: const Text('굵은 글씨'),
+      value: s.bold,
+      onChanged: (v) => _update((s) => s.copyWith(bold: v)),
+    ),
+  ];
+
+  List<Widget> _clockFields(Scene s) => [
+    const FieldLabel('표시 형식'),
+    ChoiceRow<ClockFormat>(
+      options: const [
+        (ClockFormat.hm, Icons.schedule, '14:05'),
+        (ClockFormat.hms, Icons.timer_outlined, '14:05:09'),
+        (ClockFormat.hm12, Icons.wb_sunny_outlined, '오후 2:05'),
+        (ClockFormat.dateHm, Icons.calendar_today, '10/24 14:05'),
+      ],
+      selected: s.clockFormat,
+      onSelected: (v) => _update((s) => s.copyWith(clockFormat: v)),
+    ),
+    const Hint(
+      '이 기기의 현재 시간을 보여 줍니다. 시간이 바뀔 때마다 갱신되고, 플립 도트에서는 '
+      '바뀐 숫자의 원판만 뒤집힙니다.',
     ),
     SwitchListTile(
       contentPadding: EdgeInsets.zero,

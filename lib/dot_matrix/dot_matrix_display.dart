@@ -6,6 +6,7 @@ import 'package:flutter/scheduler.dart';
 
 import '../models/show.dart';
 import '../sound/flip_sound.dart';
+import 'clock_font.dart';
 import 'dot_bitmap.dart';
 import 'dot_matrix_painter.dart';
 import 'flip_board.dart';
@@ -75,6 +76,13 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
 
   final _board = FlipBoard();
 
+  /// The time text a clock scene currently shows.
+  String? _clockText;
+
+  /// Source of the current time (replaceable in tests).
+  @visibleForTesting
+  static DateTime Function() now = DateTime.now;
+
   /// Transition to play on the board's next update after a scene change.
   SceneTransition? _pendingWave;
 
@@ -119,11 +127,14 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
             (o.direction == MarqueeDirection.none) ||
         s.kind != o.kind ||
         widget.panel.rows != old.panel.rows ||
-        (s.kind == SceneKind.text
-            ? s.text != o.text || s.bold != o.bold
-            : s.image != o.image ||
-                  s.imageThreshold != o.imageThreshold ||
-                  s.imageColorMode != o.imageColorMode);
+        switch (s.kind) {
+          SceneKind.text => s.text != o.text || s.bold != o.bold,
+          SceneKind.clock => s.clockFormat != o.clockFormat || s.bold != o.bold,
+          SceneKind.image =>
+            s.image != o.image ||
+                s.imageThreshold != o.imageThreshold ||
+                s.imageColorMode != o.imageColorMode,
+        };
     if (contentChanged) _rasterize();
     if (s.direction != o.direction && _showingCurrent) {
       _scroll = 0;
@@ -138,7 +149,17 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
     final rows = widget.panel.rows;
     final image = s.image;
     final DotBitmap bitmap;
-    if (s.kind == SceneKind.image) {
+    if (s.kind == SceneKind.clock) {
+      final time = now();
+      _clockText = formatClock(time, s.clockFormat);
+      bitmap = await rasterizeClock(
+        time,
+        s.clockFormat,
+        rows: rows,
+        maxWidth: widget.columns,
+        bold: s.bold,
+      );
+    } else if (s.kind == SceneKind.image) {
       bitmap = image == null
           ? DotBitmap.empty(rows)
           : await rasterizeImage(
@@ -187,6 +208,13 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
     _lastTick = elapsed;
     if (widget.paused) return;
     final look = _look;
+    // A clock redraws when the shown time changes (the board then flips
+    // just the discs of the digits that changed).
+    if (widget.scene.kind == SceneKind.clock &&
+        formatClock(now(), widget.scene.clockFormat) != _clockText) {
+      _clockText = formatClock(now(), widget.scene.clockFormat);
+      _rasterize();
+    }
     _seconds += dt;
     _scroll += dt * look.speed;
     if (widget.panel.flipDots) _updateBoard(look);
