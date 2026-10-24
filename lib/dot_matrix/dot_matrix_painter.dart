@@ -6,6 +6,7 @@ import 'package:flutter/rendering.dart';
 
 import '../models/show.dart';
 import 'dot_bitmap.dart';
+import 'flip_board.dart';
 
 /// Animation state shared between the ticker and the painter.
 class DotFrame {
@@ -93,6 +94,7 @@ class DotMatrixPainter extends CustomPainter {
     required this.panel,
     required this.frame,
     this.flip,
+    this.board,
   }) : super(repaint: frame);
 
   final DotBitmap bitmap;
@@ -103,6 +105,9 @@ class DotMatrixPainter extends CustomPainter {
   /// Set while this scene is part of a flip transition. The background is
   /// then left to the caller so both scenes can share it.
   final FlipState? flip;
+
+  /// The discs of a flip-dot panel; null for LEDs.
+  final FlipBoard? board;
 
   static const _rainbow = [
     Color(0xFFFF3B30),
@@ -208,9 +213,11 @@ class DotMatrixPainter extends CustomPainter {
       return p;
     }
 
+    // Discs are mechanical: they reflect light rather than glow.
+    final glow = panel.glow && !panel.flipDots;
     void drawLit(Float32List points, Paint Function() paint) {
       if (points.isEmpty) return;
-      if (panel.glow) {
+      if (glow) {
         canvas.drawRawPoints(
           ui.PointMode.points,
           points,
@@ -265,6 +272,28 @@ class DotMatrixPainter extends CustomPainter {
       return;
     }
 
+    final board = this.board;
+    if (board != null && board.cols == cols && board.rows == rows) {
+      _paintBoard(
+        canvas,
+        board,
+        now: f.seconds,
+        cols: cols,
+        rows: rows,
+        pitchX: pitchX,
+        pitchY: pitchY,
+        dot: dot,
+        cap: cap,
+        shift: shift,
+        slide: slide,
+        width: size.width,
+        offPaint: offPaint,
+        drawLit: drawLit,
+        litPaint: () => litPaint(tx: 0),
+      );
+      return;
+    }
+
     final off = Float32List(cols * rows * 2);
     final on = Float32List(cols * rows * 2);
     var offN = 0, onN = 0;
@@ -290,6 +319,91 @@ class DotMatrixPainter extends CustomPainter {
       );
     }
     drawLit(Float32List.sublistView(on, 0, onN), () => litPaint(tx: 0));
+  }
+
+  /// Flip-dot board: settled discs are batched like LEDs; turning ones are
+  /// drawn one by one, squeezed to their current width, showing whichever
+  /// face is towards the viewer.
+  void _paintBoard(
+    Canvas canvas,
+    FlipBoard board, {
+    required double now,
+    required int cols,
+    required int rows,
+    required double pitchX,
+    required double pitchY,
+    required double dot,
+    required StrokeCap cap,
+    required int shift,
+    required double slide,
+    required double width,
+    required Paint? offPaint,
+    required void Function(Float32List points, Paint Function() paint) drawLit,
+    required Paint Function() litPaint,
+  }) {
+    final off = Float32List(cols * rows * 2);
+    final on = Float32List(cols * rows * 2);
+    var offN = 0, onN = 0;
+    final turning = <int>[];
+    for (var r = 0; r < rows; r++) {
+      final y = pitchY / 2 + r * pitchY;
+      for (var c = 0; c < cols; c++) {
+        final i = r * cols + c;
+        if (board.widthAt(i, now) < 1) {
+          turning.add(i);
+          continue;
+        }
+        final x = pitchX / 2 + c * pitchX;
+        if (board.faceAt(i, now) == 1) {
+          on[onN++] = x;
+          on[onN++] = y;
+        } else {
+          off[offN++] = x;
+          off[offN++] = y;
+        }
+      }
+    }
+    if (offPaint != null && offN > 0) {
+      canvas.drawRawPoints(
+        ui.PointMode.points,
+        Float32List.sublistView(off, 0, offN),
+        offPaint,
+      );
+    }
+    drawLit(Float32List.sublistView(on, 0, onN), litPaint);
+
+    if (turning.isEmpty) return;
+    final litDisc = Paint();
+    // The disc's back is dark; draw it even when unlit dots are hidden, or
+    // turning discs would vanish mid-flip.
+    final backDisc = Paint()
+      ..color = offPaint?.color ?? const Color(0x33FFFFFF);
+    for (final i in turning) {
+      final c = i % cols, r = i ~/ cols;
+      final center = Offset(pitchX / 2 + c * pitchX, pitchY / 2 + r * pitchY);
+      final rect = Rect.fromCenter(
+        center: center,
+        width: math.max(1, dot * board.widthAt(i, now)),
+        height: dot,
+      );
+      final Paint paint;
+      if (board.faceAt(i, now) == 1) {
+        final argb = scene.usesDotColor ? null : bitmap.colorAt(c + shift, r);
+        litDisc.color = argb != null
+            ? Color(argb)
+            : scene.rainbow && scene.usesDotColor
+            ? _rainbowAt(center.dx / width + slide)
+            : scene.dotColor;
+        paint = litDisc;
+      } else {
+        paint = backDisc;
+      }
+      if (cap == StrokeCap.round) {
+        canvas.drawOval(rect, paint);
+      } else {
+        canvas.drawRect(rect, paint);
+      }
+    }
   }
 
   @override

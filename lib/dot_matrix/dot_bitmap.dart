@@ -7,10 +7,14 @@ import 'package:flutter/painting.dart';
 /// A bitmap of [width] columns by [rows] rows of on/off dots, optionally
 /// with a per-dot [colors] image of the same size.
 class DotBitmap {
-  DotBitmap(this.width, this.rows, this._bits, {this.colors})
+  DotBitmap(this.width, this.rows, this._bits, {this.colors, this.argb})
     : assert(_bits.length == width * rows);
 
-  DotBitmap.empty(this.rows) : width = 0, _bits = Uint8List(0), colors = null;
+  DotBitmap.empty(this.rows)
+    : width = 0,
+      _bits = Uint8List(0),
+      colors = null,
+      argb = null;
 
   final int width;
   final int rows;
@@ -19,6 +23,17 @@ class DotBitmap {
   /// Colors of lit dots, one pixel per dot; null means a single dot color.
   /// Owned by this bitmap: release it with [dispose].
   final ui.Image? colors;
+
+  /// The same colors as ARGB values, row by row, for dots drawn one at a
+  /// time (flip-dot animation).
+  final Uint32List? argb;
+
+  /// ARGB color of dot ([x], [y]) when the bitmap carries [argb] colors.
+  int? colorAt(int x, int y) {
+    final c = argb;
+    if (c == null || x < 0 || x >= width || y < 0 || y >= rows) return null;
+    return c[y * width + x];
+  }
 
   void dispose() => colors?.dispose();
 
@@ -159,6 +174,7 @@ Future<DotBitmap> rasterizeImage(
   }
 
   final bits = Uint8List(width * rows);
+  final argb = keepColors ? Uint32List(width * rows) : null;
   final top = (rows - height) ~/ 2;
   for (var y = 0; y < height; y++) {
     for (var x = 0; x < width; x++) {
@@ -171,13 +187,20 @@ Future<DotBitmap> rasterizeImage(
               0.0722 * data.getUint8(o + 2)) /
           255;
       if (lum >= threshold) bits[(top + y) * width + x] = 1;
+      argb?[(top + y) * width + x] =
+          0xFF000000 |
+          data.getUint8(o) << 16 |
+          data.getUint8(o + 1) << 8 |
+          data.getUint8(o + 2);
     }
   }
   if (!keepColors) {
     image.dispose();
     return DotBitmap(width, rows, bits);
   }
-  if (image.height == rows) return DotBitmap(width, rows, bits, colors: image);
+  if (image.height == rows) {
+    return DotBitmap(width, rows, bits, colors: image, argb: argb);
+  }
   // Shouldn't happen (the codec scales to [rows]), but keep the color image
   // aligned with the bits if it does.
   final recorder = ui.PictureRecorder();
@@ -186,7 +209,7 @@ Future<DotBitmap> rasterizeImage(
   final aligned = await picture.toImage(width, rows);
   picture.dispose();
   image.dispose();
-  return DotBitmap(width, rows, bits, colors: aligned);
+  return DotBitmap(width, rows, bits, colors: aligned, argb: argb);
 }
 
 /// Prepares a user-picked image file for storage: decodes it (any format

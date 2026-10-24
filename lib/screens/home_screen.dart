@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../dot_matrix/show_player.dart';
 import '../models/show_store.dart';
 import '../platform/screen_mode.dart';
+import '../sound/flip_sound.dart';
 import 'editor/panel_editor.dart';
 import 'editor/scene_editor.dart';
 import 'editor/scene_strip.dart';
@@ -33,6 +34,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _openSign() {
     // Within the tap itself, so the browser allows going fullscreen.
     enterSignMode();
+    FlipSound.instance.unlock();
     Navigator.of(context).push(
       PageRouteBuilder(
         pageBuilder: (_, _, _) => SignScreen(store: store),
@@ -60,6 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
             show: show,
             soloSceneId: _playAll ? null : _selectedId,
             onSceneChanged: (i) => setState(() => _playingIndex = i),
+            sound: true,
           ),
         ),
       ),

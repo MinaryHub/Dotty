@@ -14,6 +14,7 @@ class ShowPlayer extends StatefulWidget {
     this.paused = false,
     this.soloSceneId,
     this.onSceneChanged,
+    this.sound = false,
   });
 
   final Show show;
@@ -24,6 +25,9 @@ class ShowPlayer extends StatefulWidget {
 
   /// Reports the index of the scene now playing.
   final ValueChanged<int>? onSceneChanged;
+
+  /// Whether a flip-dot panel clicks as its discs turn.
+  final bool sound;
 
   @override
   State<ShowPlayer> createState() => _ShowPlayerState();
@@ -113,7 +117,10 @@ class _ShowPlayerState extends State<ShowPlayer>
       _index = (_index + 1) % _scenes.length;
       _entries++;
       _elapsed = 0;
-      final cut = _current.transition == SceneTransition.cut;
+      // A flip-dot board turns its own discs over to the next scene.
+      final cut =
+          _current.transition == SceneTransition.cut ||
+          widget.show.panel.flipDots;
       _outgoing = cut ? null : previous;
       _transition = cut ? 1 : 0;
     });
@@ -126,13 +133,16 @@ class _ShowPlayerState extends State<ShowPlayer>
     super.dispose();
   }
 
-  Widget _display(_PlayingScene p, FlipState? flip) {
+  Widget _display(_PlayingScene p, FlipState? flip, {Key? key}) {
     return DotMatrixDisplay(
+      key: key,
       scene: p.scene,
+      entry: p.entry,
       panel: widget.show.panel,
       paused: widget.paused,
       onPass: (n) => _onPass(p.scene, n),
       flip: flip,
+      sound: widget.sound,
     );
   }
 
@@ -155,6 +165,13 @@ class _ShowPlayerState extends State<ShowPlayer>
             ),
             outgoing.entry,
           );
+
+    if (widget.show.panel.flipDots) {
+      // One board for the whole show; scene changes flip its discs.
+      return ClipRect(
+        child: _display(current, null, key: const ValueKey('flip-board')),
+      );
+    }
 
     return ClipRect(
       child: LayoutBuilder(
