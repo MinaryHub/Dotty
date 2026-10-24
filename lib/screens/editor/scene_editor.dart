@@ -289,12 +289,17 @@ class _SceneEditorState extends State<SceneEditor> {
       min: 0,
       max: 120,
       display: (v) => v.round() == 0 ? '0 (멈춤)' : '${v.round()} 칸/초',
-      onChanged: (v) => _update((s) => s.copyWith(speed: v.roundToDouble())),
+      onChanged: s.direction == MarqueeDirection.none
+          ? null
+          : (v) => _update((s) => s.copyWith(speed: v.roundToDouble())),
     ),
     if (s.speed <= 0 && s.direction != MarqueeDirection.none)
       const Hint('속도 0: 글자가 흐르지 않고 가운데에 멈춰 있습니다.'),
     if (s.direction == MarqueeDirection.none)
-      const Hint('고정이라도 화면보다 긴 글자는 잘리지 않도록 이 속도로 흐릅니다.'),
+      const Hint(
+        '고정 장면은 속도를 쓰지 않습니다. 화면보다 긴 글자만 잘리지 않도록 '
+        '일정한 속도로 흐릅니다.',
+      ),
     SwitchListTile(
       contentPadding: EdgeInsets.zero,
       title: const Text('깜빡임'),

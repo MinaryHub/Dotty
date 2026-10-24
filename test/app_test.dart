@@ -265,4 +265,40 @@ void main() {
     expect(painter.scene.direction, MarqueeDirection.none);
     expect(const Scene(id: 's', speed: 0).usesPasses, isFalse);
   });
+
+  testWidgets('a still scene ignores its speed setting', (tester) async {
+    Future<DotMatrixPainter> painterFor(double speed) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DotMatrixDisplay(
+            key: ValueKey(speed),
+            scene: Scene(
+              id: 's',
+              text: 'HI',
+              direction: MarqueeDirection.none,
+              speed: speed,
+            ),
+            panel: const PanelSettings(),
+            columns: 40,
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      return tester
+              .widget<CustomPaint>(
+                find.descendant(
+                  of: find.byType(DotMatrixDisplay),
+                  matching: find.byType(CustomPaint),
+                ),
+              )
+              .painter!
+          as DotMatrixPainter;
+    }
+
+    for (final speed in [0.0, 20.0, 120.0]) {
+      final p = await painterFor(speed);
+      expect(p.scene.direction, MarqueeDirection.none);
+      expect(p.frame.value.scroll, 0, reason: 'nothing moves at speed $speed');
+    }
+  });
 }
