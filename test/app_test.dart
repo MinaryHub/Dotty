@@ -5,6 +5,7 @@ import 'package:dotty/models/show.dart';
 import 'package:dotty/models/show_store.dart';
 import 'package:dotty/screens/sign_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -200,6 +201,42 @@ void main() {
     store.updatePanel((p) => p.copyWith(aspectRatio: 2));
     await tester.pump();
     expect(tester.widget<DotMatrixDisplay>(sign.first).columns, rows * 2);
+    await tester.pump(const Duration(seconds: 4));
+  });
+
+  testWidgets('fullscreen plays only the selected scene unless continuous', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final store = ShowStore.memory();
+    await tester.pumpWidget(DottyApp(store: store));
+    await tester.pump();
+
+    ShowPlayer signPlayer() => tester.widget<ShowPlayer>(
+      find.descendant(
+        of: find.byType(SignScreen),
+        matching: find.byType(ShowPlayer),
+      ),
+    );
+
+    // Default: just the selected (first) scene.
+    await tester.tap(find.text('전체 화면'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(signPlayer().soloSceneId, store.value.scenes.first.id);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    // Continuous play on: the whole show.
+    await tester.tap(find.text('연속 재생'));
+    await tester.pump();
+    await tester.tap(find.text('전체 화면'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(signPlayer().soloSceneId, isNull);
     await tester.pump(const Duration(seconds: 4));
   });
 }
