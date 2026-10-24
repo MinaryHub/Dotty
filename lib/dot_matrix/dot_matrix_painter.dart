@@ -8,6 +8,7 @@ import '../models/show.dart';
 import 'disc_sprites.dart';
 import 'dot_bitmap.dart';
 import 'flip_board.dart';
+import 'led_sprites.dart';
 
 /// Animation state shared between the ticker and the painter.
 class DotFrame {
@@ -97,6 +98,7 @@ class DotMatrixPainter extends CustomPainter {
     this.flip,
     this.board,
     this.pixelRatio = 1,
+    this.columns,
   }) : super(repaint: frame);
 
   final DotBitmap bitmap;
@@ -113,6 +115,9 @@ class DotMatrixPainter extends CustomPainter {
 
   /// Device pixels per logical pixel, so disc sprites render crisply.
   final double pixelRatio;
+
+  /// Fixed grid width in dots; by default as many as fit.
+  final int? columns;
 
   static const _rainbow = [
     Color(0xFFFF3B30),
@@ -147,7 +152,7 @@ class DotMatrixPainter extends CustomPainter {
     // The grid fills the whole area: rows fix the vertical pitch, and the
     // columns that fit are spread to the full width (a hair wider than tall).
     final pitchY = size.height / rows;
-    final cols = columnsFor(size, rows);
+    final cols = columns ?? columnsFor(size, rows);
     final pitchX = size.width / cols;
     final originX = pitchX / 2;
     final originY = pitchY / 2;
@@ -170,115 +175,13 @@ class DotMatrixPainter extends CustomPainter {
       direction: scene.direction,
     );
 
-    final offPaint = panel.offDotOpacity <= 0
-        ? null
-        : (Paint()
-            ..color =
-                (scene.usesDotColor ? scene.dotColor : const Color(0xFFFFFFFF))
-                    .withValues(alpha: panel.offDotOpacity)
-            ..strokeWidth = dot
-            ..strokeCap = cap);
-    final colors = scene.usesDotColor ? null : bitmap.colors;
     final slide = f.seconds * 0.25 % 1;
 
-    // [tx]: x of the panel's left edge in the current canvas coordinates.
-    Paint litPaint({required double tx, Color? solid}) {
-      final p = Paint()
-        ..strokeWidth = dot
-        ..strokeCap = cap;
-      if (colors != null) {
-        // Each bitmap pixel lands exactly on its dot's center, so nearest
-        // sampling gives every dot the color of its source pixel.
-        p.shader = ui.ImageShader(
-          colors,
-          TileMode.clamp,
-          TileMode.clamp,
-          Float64List.fromList([
-            pitchX, 0, 0, 0, //
-            0, pitchY, 0, 0, //
-            0, 0, 1, 0, //
-            tx - shift * pitchX, 0, 0, 1, //
-          ]),
-          filterQuality: FilterQuality.none,
-        );
-      } else if (solid != null) {
-        p.color = solid;
-      } else if (scene.rainbow) {
-        // Gradient slides sideways over time for a flowing rainbow.
-        p.shader = ui.Gradient.linear(
-          Offset(-slide * size.width, 0),
-          Offset(size.width - slide * size.width, 0),
-          _rainbow,
-          null,
-          TileMode.repeated,
-        );
-      } else {
-        p.color = scene.dotColor;
-      }
-      return p;
-    }
-
-    // Discs are mechanical: they reflect light rather than glow.
-    final glow = panel.glow && !panel.flipDots;
-    void drawLit(Float32List points, Paint Function() paint) {
-      if (points.isEmpty) return;
-      if (glow) {
-        canvas.drawRawPoints(
-          ui.PointMode.points,
-          points,
-          paint()
-            ..strokeWidth = dot * 1.3
-            ..maskFilter = MaskFilter.blur(BlurStyle.normal, dot * 0.5),
-        );
-      }
-      canvas.drawRawPoints(ui.PointMode.points, points, paint());
-    }
-
-    if (flip != null) {
-      // Turning columns are drawn one by one, each squeezed horizontally
-      // around its own center.
-      final off = Float32List(rows * 2);
-      final on = Float32List(rows * 2);
-      for (var c = 0; c < cols; c++) {
-        final scale = flip.columnScale(c, cols);
-        if (scale == null || scale < 0.02) continue;
-        final src = c + shift;
-        var offN = 0, onN = 0;
-        for (var r = 0; r < rows; r++) {
-          final y = originY + r * pitchY;
-          if (ready && bitmap.isOn(src, r)) {
-            on[onN++] = 0;
-            on[onN++] = y;
-          } else {
-            off[offN++] = 0;
-            off[offN++] = y;
-          }
-        }
-        final x = originX + c * pitchX;
-        canvas.save();
-        canvas.translate(x, 0);
-        canvas.scale(scale, 1);
-        if (offPaint != null && offN > 0) {
-          canvas.drawRawPoints(
-            ui.PointMode.points,
-            Float32List.sublistView(off, 0, offN),
-            offPaint,
-          );
-        }
-        final rainbow = colors == null && scene.rainbow
-            ? _rainbowAt(x / size.width + slide)
-            : null;
-        drawLit(
-          Float32List.sublistView(on, 0, onN),
-          () => litPaint(tx: -x, solid: rainbow),
-        );
-        canvas.restore();
-      }
-      return;
-    }
-
     final board = this.board;
-    if (board != null && board.cols == cols && board.rows == rows) {
+    if (flip == null &&
+        board != null &&
+        board.cols == cols &&
+        board.rows == rows) {
       _paintBoard(
         canvas,
         board,
@@ -296,31 +199,143 @@ class DotMatrixPainter extends CustomPainter {
       return;
     }
 
-    final off = Float32List(cols * rows * 2);
-    final on = Float32List(cols * rows * 2);
-    var offN = 0, onN = 0;
-    for (var c = 0; c < cols; c++) {
-      final src = c + shift;
-      final x = originX + c * pitchX;
-      for (var r = 0; r < rows; r++) {
-        final y = originY + r * pitchY;
-        if (ready && bitmap.isOn(src, r)) {
-          on[onN++] = x;
-          on[onN++] = y;
-        } else {
-          off[offN++] = x;
-          off[offN++] = y;
+    // LEDs: each a domed lens in a socket, tinted with its own color.
+    final sprites = LedSprites.of(
+      dot,
+      pixelRatio,
+      round: cap == StrokeCap.round,
+    );
+    // An unlit LED shows its tinted epoxy; how much follows the setting.
+    final offLevel = (panel.offDotOpacity * 1.8).clamp(0.0, 1.0);
+
+    int colorOf(int c, int r, double x, bool on) {
+      if (!scene.usesDotColor) {
+        // Image colors for lit dots; unlit image dots are neutral.
+        return (on ? bitmap.colorAt(c + shift, r) : null) ?? 0xFFBDBDBD;
+      }
+      if (scene.rainbow) return _rainbowAt(x / size.width + slide).toARGB32();
+      return scene.dotColor.toARGB32();
+    }
+
+    if (flip != null) {
+      // Turning columns are drawn one by one, each squeezed horizontally
+      // around its own center.
+      final column = _LedBatch(rows);
+      for (var c = 0; c < cols; c++) {
+        final scale = flip.columnScale(c, cols);
+        if (scale == null || scale < 0.02) continue;
+        final x = originX + c * pitchX;
+        column.clear();
+        for (var r = 0; r < rows; r++) {
+          final on = ready && bitmap.isOn(c + shift, r);
+          column.add(0, originY + r * pitchY, on, colorOf(c, r, x, on));
         }
+        canvas.save();
+        canvas.translate(x, 0);
+        canvas.scale(scale, 1);
+        _paintLeds(canvas, sprites, column, offLevel);
+        canvas.restore();
+      }
+      return;
+    }
+
+    final leds = _LedBatch(cols * rows);
+    for (var r = 0; r < rows; r++) {
+      final y = originY + r * pitchY;
+      for (var c = 0; c < cols; c++) {
+        final x = originX + c * pitchX;
+        final on = ready && bitmap.isOn(c + shift, r);
+        leds.add(x, y, on, colorOf(c, r, x, on));
       }
     }
-    if (offPaint != null && offN > 0) {
-      canvas.drawRawPoints(
-        ui.PointMode.points,
-        Float32List.sublistView(off, 0, offN),
-        offPaint,
+    _paintLeds(canvas, sprites, leds, offLevel);
+  }
+
+  /// Stamps [leds] in layers: sockets, the bloom of lit ones, lenses tinted
+  /// with each LED's color (dimmed when unlit), the hot cores of lit dies,
+  /// and the specular highlight on every lens.
+  void _paintLeds(
+    Canvas canvas,
+    LedSprites sprites,
+    _LedBatch leds,
+    double offLevel,
+  ) {
+    final k = 1 / sprites.pixelRatio;
+    final half = sprites.cell / 2;
+    var litN = 0;
+    for (var i = 0; i < leds.length; i++) {
+      if (leds.on[i] == 1) litN++;
+    }
+    final offN = offLevel > 0 ? leds.length - litN : 0;
+    final n = litN + offN;
+    if (n == 0) return;
+
+    // Lit LEDs first, then unlit ones, so each layer can take a prefix.
+    final transforms = Float32List(n * 4);
+    final tints = Int32List(n);
+    final cores = Int32List(litN);
+    final shine = Int32List(n);
+    var li = 0, oi = litN;
+    for (var i = 0; i < leds.length; i++) {
+      final lit = leds.on[i] == 1;
+      if (!lit && offN == 0) continue;
+      final j = lit ? li++ : oi++;
+      transforms[j * 4] = k;
+      transforms[j * 4 + 1] = 0;
+      transforms[j * 4 + 2] = leds.xy[i * 2] - k * half;
+      transforms[j * 4 + 3] = leds.xy[i * 2 + 1] - k * half;
+      final color = leds.color[i];
+      if (lit) {
+        tints[j] = color;
+        cores[j] = _mix(color, 0xFFFFFFFF, 0.35);
+        // The LED's own light outshines most of the reflection.
+        shine[j] = 0xFF8C8C8C;
+      } else {
+        tints[j] = _shade(color, offLevel);
+        shine[j] = 0xFF5A5A5A;
+      }
+    }
+
+    final paint = Paint()..filterQuality = FilterQuality.low;
+    // Light adds up: bloom and hot cores brighten what is beneath them.
+    final light = Paint()
+      ..filterQuality = FilterQuality.low
+      ..blendMode = BlendMode.plus;
+    void layer(
+      int sprite,
+      int count,
+      Int32List? colors, {
+      int from = 0,
+      bool additive = false,
+    }) {
+      if (count <= 0) return;
+      final rect = sprites.source(sprite);
+      final rects = Float32List(count * 4);
+      for (var j = 0; j < count; j++) {
+        rects[j * 4] = rect.left;
+        rects[j * 4 + 1] = rect.top;
+        rects[j * 4 + 2] = rect.right;
+        rects[j * 4 + 3] = rect.bottom;
+      }
+      canvas.drawRawAtlas(
+        sprites.image,
+        Float32List.sublistView(transforms, from * 4, (from + count) * 4),
+        rects,
+        colors == null
+            ? null
+            : Int32List.sublistView(colors, from, from + count),
+        colors == null ? null : BlendMode.modulate,
+        null,
+        additive ? light : paint,
       );
     }
-    drawLit(Float32List.sublistView(on, 0, onN), () => litPaint(tx: 0));
+
+    layer(LedSprites.socket, n, null);
+    if (panel.glow) layer(LedSprites.bloom, litN, tints, additive: true);
+    layer(LedSprites.lens, n, tints);
+    layer(LedSprites.core, litN, cores, additive: true);
+    // Reflections only ever add light.
+    layer(LedSprites.highlight, n, shine, additive: true);
   }
 
   /// Flip-dot board, drawn as physical discs: each sits in a socket, casts
@@ -354,11 +369,6 @@ class DotMatrixPainter extends CustomPainter {
       if (argb != null) return argb;
       if (scene.rainbow) return _rainbowAt(x / size.width + slide).toARGB32();
       return scene.dotColor.toARGB32();
-    }
-
-    int shade(int argb, double f) {
-      int ch(int shift) => (((argb >> shift) & 0xFF) * f).round().clamp(0, 255);
-      return 0xFF000000 | ch(16) << 16 | ch(8) << 8 | ch(0);
     }
 
     final all = Float32List(n * 4);
@@ -408,10 +418,10 @@ class DotMatrixPainter extends CustomPainter {
         rect(shadowRects, restN++, shadowSrc);
         if (board.faceAt(i, now) == 1) {
           put(faceRects, faceN, x, y, tilt);
-          faceColors[faceN++] = shade(faceColor(c, r, x), board.tint[i]);
+          faceColors[faceN++] = _shade(faceColor(c, r, x), board.tint[i]);
         } else {
           put(backRest, backN, x, y, tilt);
-          backColors[backN++] = shade(0xFFFFFFFF, backLevel * board.tint[i]);
+          backColors[backN++] = _shade(0xFFFFFFFF, backLevel * board.tint[i]);
         }
       }
     }
@@ -488,8 +498,8 @@ class DotMatrixPainter extends CustomPainter {
       final light = board.tint[i] * (0.45 + 0.55 * w);
       final lit = board.faceAt(i, now) == 1;
       final color = lit
-          ? shade(faceColor(c, r, center.dx), light)
-          : shade(0xFFFFFFFF, backLevel * light);
+          ? _shade(faceColor(c, r, center.dx), light)
+          : _shade(0xFFFFFFFF, backLevel * light);
       canvas.drawImageRect(
         sprites.image,
         lit ? faceSrc : backSrc,
@@ -535,5 +545,45 @@ class DotMatrixPainter extends CustomPainter {
       old.scene != scene ||
       old.panel != panel ||
       old.frame != frame ||
-      old.flip != flip;
+      old.flip != flip ||
+      old.columns != columns;
+}
+
+/// LEDs to draw: centers, lit flags and colors (ARGB).
+class _LedBatch {
+  _LedBatch(int capacity)
+    : xy = Float32List(capacity * 2),
+      on = Uint8List(capacity),
+      color = Int32List(capacity);
+
+  final Float32List xy;
+  final Uint8List on;
+  final Int32List color;
+  int length = 0;
+
+  void add(double x, double y, bool lit, int argb) {
+    xy[length * 2] = x;
+    xy[length * 2 + 1] = y;
+    on[length] = lit ? 1 : 0;
+    color[length] = argb;
+    length++;
+  }
+
+  void clear() => length = 0;
+}
+
+/// [argb] with its channels scaled by [f] (opaque).
+int _shade(int argb, double f) {
+  int ch(int shift) => (((argb >> shift) & 0xFF) * f).round().clamp(0, 255);
+  return 0xFF000000 | ch(16) << 16 | ch(8) << 8 | ch(0);
+}
+
+/// [a] blended towards [b] by [t] (opaque).
+int _mix(int a, int b, double t) {
+  int ch(int shift) {
+    final x = (a >> shift) & 0xFF, y = (b >> shift) & 0xFF;
+    return (x + (y - x) * t).round();
+  }
+
+  return 0xFF000000 | ch(16) << 16 | ch(8) << 8 | ch(0);
 }

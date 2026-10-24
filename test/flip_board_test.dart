@@ -107,4 +107,15 @@ void main() {
     expect(board.tilt.every((t) => t.abs() <= 0.05), isTrue);
     expect(board.tint.toSet().length, greaterThan(32));
   });
+
+  test('time scale slows every disc down', () {
+    final board = FlipBoard()..timeScale = 3;
+    board.update(Uint8List.fromList([0]), 1, 1, 0, delayOf: (_, _) => 0);
+    board.update(Uint8List.fromList([1]), 1, 1, 1, delayOf: (_, _) => 0);
+    // At the normal flip time it is still on its way.
+    expect(board.movingAt(0, 1 + FlipBoard.flipSeconds), isTrue);
+    expect(board.faceAt(0, 1 + FlipBoard.turnSeconds * 0.9), 0);
+    expect(board.movingAt(0, 1 + FlipBoard.flipSeconds * 3 + 1e-6), isFalse);
+    expect(board.faceAt(0, 1 + FlipBoard.flipSeconds * 3), 1);
+  });
 }

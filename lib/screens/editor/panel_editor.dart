@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../dot_matrix/sign_geometry.dart';
 import '../../models/show.dart';
 import '../../models/show_store.dart';
 import '../../sound/flip_sound.dart';
@@ -41,6 +42,18 @@ class PanelEditor extends StatelessWidget {
                   : '빛나는 LED 전광판입니다.',
             ),
             if (p.flipDots) ...[
+              LabeledSlider(
+                label: '원판 뒤집힘 시간',
+                value: p.flipSeconds,
+                min: 0.08,
+                max: 1.0,
+                display: (v) => '${v.toStringAsFixed(2)}초',
+                onChanged: (v) => update((p) => p.copyWith(flipSeconds: v)),
+              ),
+              const Hint(
+                '원판 하나가 뒤집혀 멈출 때까지의 시간입니다. 장면이 바뀔 때 물결이 '
+                '화면을 지나가는 시간은 아래 "전환 효과 시간"으로 조절합니다.',
+              ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('뒤집히는 소리'),
@@ -61,6 +74,39 @@ class PanelEditor extends StatelessWidget {
                     : null,
               ),
             ],
+            const SectionHeader('화면 비율'),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final (ratio, label) in const [
+                  (0.0, '자동 (이 화면)'),
+                  (16 / 9, '16:9'),
+                  (4 / 3, '4:3'),
+                  (21 / 9, '21:9'),
+                  (32 / 9, '32:9'),
+                  (3.0, '3:1'),
+                  (2.0, '2:1'),
+                  (1.0, '1:1'),
+                  (9 / 16, '9:16 세로'),
+                ])
+                  ChoiceChip(
+                    label: Text(label),
+                    selected: (p.aspectRatio - ratio).abs() < 0.001,
+                    onSelected: (_) =>
+                        update((p) => p.copyWith(aspectRatio: ratio)),
+                  ),
+              ],
+            ),
+            Builder(
+              builder: (context) {
+                final columns = signColumns(p, signAspect(context, p));
+                return Hint(
+                  '가로 $columns × 세로 ${p.rows} 점. 미리보기와 전체 화면이 같은 모양으로 '
+                  '보입니다. "자동"은 이 기기 화면 비율에 맞춰 전체 화면을 꽉 채웁니다.',
+                );
+              },
+            ),
             const SectionHeader('도트'),
             LabeledSlider(
               label: '해상도 (세로 점 수)',

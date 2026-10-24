@@ -26,6 +26,7 @@ class DotMatrixDisplay extends StatefulWidget {
     this.flip,
     this.entry = 0,
     this.sound = false,
+    this.columns,
   });
 
   final Scene scene;
@@ -44,6 +45,10 @@ class DotMatrixDisplay extends StatefulWidget {
 
   /// Whether flipping discs click (flip-dot boards only).
   final bool sound;
+
+  /// Fixed number of dot columns (the sign's grid); by default as many as
+  /// fit the available width.
+  final int? columns;
 
   @override
   State<DotMatrixDisplay> createState() => _DotMatrixDisplayState();
@@ -220,6 +225,7 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
           };
     }
 
+    _board.timeScale = widget.panel.flipSeconds / FlipBoard.flipSeconds;
     final sound = widget.sound && widget.panel.flipSound;
     final buckets = <int, int>{};
     _board.update(
@@ -263,7 +269,9 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
     return RepaintBoundary(
       child: LayoutBuilder(
         builder: (context, constraints) {
-          _columns = columnsFor(constraints.biggest, widget.panel.rows);
+          _columns =
+              widget.columns ??
+              columnsFor(constraints.biggest, widget.panel.rows);
           // Set up the discs right away (silently) so still displays, like
           // scene thumbnails, show them too.
           if (widget.panel.flipDots &&
@@ -279,6 +287,7 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
               flip: widget.flip,
               board: widget.panel.flipDots ? _board : null,
               pixelRatio: MediaQuery.maybeDevicePixelRatioOf(context) ?? 1,
+              columns: widget.columns,
             ),
             child: const SizedBox.expand(),
           );

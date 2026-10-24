@@ -17,6 +17,9 @@ class FlipBoard {
   /// Largest rebound off the stop, in radians (~17°).
   static const _rebound = 0.3;
 
+  /// Stretches every disc's movement (1 = [flipSeconds]).
+  double timeScale = 1;
+
   int cols = 0;
   int rows = 0;
 
@@ -85,7 +88,7 @@ class FlipBoard {
 
   /// Rotation of disc [i] at [now], 0 (old face) to π (new face).
   double angleAt(int i, double now) {
-    final t = now - _flipAt[i];
+    final t = (now - _flipAt[i]) / timeScale;
     if (t <= 0) return 0;
     if (t < turnSeconds) {
       // Pulled by the magnet: slow off the mark, fastest at the end.
@@ -109,7 +112,8 @@ class FlipBoard {
   double widthAt(int i, double now) => math.cos(angleAt(i, now)).abs();
 
   /// Whether disc [i] is moving (or about to) at [now].
-  bool movingAt(int i, double now) => now - _flipAt[i] < flipSeconds;
+  bool movingAt(int i, double now) =>
+      now - _flipAt[i] < flipSeconds * timeScale;
 
   /// Whether any disc is still turning or waiting to turn at [now].
   bool busyAt(double now) {

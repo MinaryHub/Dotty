@@ -159,4 +159,47 @@ void main() {
     );
     expect(tester.widget<DotMatrixDisplay>(board).scene.id, 'b');
   });
+
+  testWidgets('preview and fullscreen show the same dot grid and shape', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final store = ShowStore.memory();
+    await tester.pumpWidget(DottyApp(store: store));
+    await tester.pump();
+
+    DotMatrixDisplay mainDisplay() => tester
+        .widgetList<DotMatrixDisplay>(find.byType(DotMatrixDisplay))
+        .firstWhere((d) => d.columns != null);
+    final previewColumns = mainDisplay().columns!;
+    final previewSize = tester.getSize(find.byType(ShowPlayer));
+    final rows = store.value.panel.rows;
+    expect(
+      previewSize.width / previewSize.height,
+      closeTo(previewColumns / rows, 0.02),
+    );
+
+    await tester.tap(find.text('전체 화면'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    final sign = find.descendant(
+      of: find.byType(SignScreen),
+      matching: find.byType(DotMatrixDisplay),
+    );
+    final signDisplay = tester.widget<DotMatrixDisplay>(sign.first);
+    expect(signDisplay.columns, previewColumns);
+    final signSize = tester.getSize(sign.first);
+    expect(
+      signSize.width / signSize.height,
+      closeTo(previewColumns / rows, 0.02),
+    );
+
+    // A fixed ratio applies to both as well.
+    store.updatePanel((p) => p.copyWith(aspectRatio: 2));
+    await tester.pump();
+    expect(tester.widget<DotMatrixDisplay>(sign.first).columns, rows * 2);
+    await tester.pump(const Duration(seconds: 4));
+  });
 }

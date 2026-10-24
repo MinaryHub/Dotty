@@ -4,6 +4,7 @@ import 'package:flutter/scheduler.dart';
 import '../models/show.dart';
 import 'dot_matrix_display.dart';
 import 'dot_matrix_painter.dart';
+import 'sign_geometry.dart';
 
 /// Plays a [Show]: each scene for its duration, then the next one with its
 /// entry transition, looping forever.
@@ -133,9 +134,10 @@ class _ShowPlayerState extends State<ShowPlayer>
     super.dispose();
   }
 
-  Widget _display(_PlayingScene p, FlipState? flip, {Key? key}) {
+  Widget _display(_PlayingScene p, FlipState? flip, int columns, {Key? key}) {
     return DotMatrixDisplay(
       key: key,
+      columns: columns,
       scene: p.scene,
       entry: p.entry,
       panel: widget.show.panel,
@@ -166,15 +168,29 @@ class _ShowPlayerState extends State<ShowPlayer>
             outgoing.entry,
           );
 
-    if (widget.show.panel.flipDots) {
+    // The sign has one fixed grid wherever it is shown, so the preview and
+    // fullscreen look identical; leftover space is filled with the board.
+    final panel = widget.show.panel;
+    final columns = signColumns(panel, signAspect(context, panel));
+    Widget sign(Widget child) => ColoredBox(
+      color: panel.backgroundColor,
+      child: Center(
+        child: AspectRatio(
+          aspectRatio: columns / panel.rows,
+          child: ClipRect(child: child),
+        ),
+      ),
+    );
+
+    if (panel.flipDots) {
       // One board for the whole show; scene changes flip its discs.
-      return ClipRect(
-        child: _display(current, null, key: const ValueKey('flip-board')),
+      return sign(
+        _display(current, null, columns, key: const ValueKey('flip-board')),
       );
     }
 
-    return ClipRect(
-      child: LayoutBuilder(
+    return sign(
+      LayoutBuilder(
         builder: (context, constraints) {
           final size = constraints.biggest;
           final t = out == null
@@ -184,7 +200,7 @@ class _ShowPlayerState extends State<ShowPlayer>
           // LED panel shifting its content.
           final rows = widget.show.panel.rows;
           final pitchY = size.height / rows;
-          final pitchX = size.width / columnsFor(size, rows);
+          final pitchX = size.width / columns;
           double snap(double v, double pitch) => (v / pitch).round() * pitch;
 
           var inOffset = Offset.zero, outOffset = Offset.zero;
@@ -222,7 +238,10 @@ class _ShowPlayerState extends State<ShowPlayer>
               key: p.key,
               child: Transform.translate(
                 offset: offset,
-                child: Opacity(opacity: opacity, child: _display(p, flip)),
+                child: Opacity(
+                  opacity: opacity,
+                  child: _display(p, flip, columns),
+                ),
               ),
             );
           }
