@@ -259,10 +259,10 @@ class _SceneEditorState extends State<SceneEditor> {
       min: 1,
       max: 120,
       display: (v) => '${v.round()} 칸/초',
-      onChanged: s.direction == MarqueeDirection.none
-          ? null
-          : (v) => _update((s) => s.copyWith(speed: v)),
+      onChanged: (v) => _update((s) => s.copyWith(speed: v)),
     ),
+    if (s.direction == MarqueeDirection.none)
+      const Hint('고정이라도 화면보다 긴 글자는 잘리지 않도록 이 속도로 흐릅니다.'),
     SwitchListTile(
       contentPadding: EdgeInsets.zero,
       title: const Text('깜빡임'),
