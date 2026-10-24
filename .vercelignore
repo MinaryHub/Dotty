@@ -1,0 +1,7 @@
+.flutter-sdk/
+.dart_tool/
+build/
+android/
+linux/
+macos/
+windows/

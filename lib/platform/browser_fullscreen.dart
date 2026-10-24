@@ -1,0 +1,3 @@
+// Browser Fullscreen API; no-ops outside the web build.
+export 'browser_fullscreen_stub.dart'
+    if (dart.library.js_interop) 'browser_fullscreen_web.dart';
