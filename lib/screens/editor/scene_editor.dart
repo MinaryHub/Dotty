@@ -297,8 +297,8 @@ class _SceneEditorState extends State<SceneEditor> {
       const Hint('속도 0: 글자가 흐르지 않고 가운데에 멈춰 있습니다.'),
     if (s.direction == MarqueeDirection.none)
       const Hint(
-        '고정 장면은 속도를 쓰지 않습니다. 화면보다 긴 글자만 잘리지 않도록 '
-        '일정한 속도로 흐릅니다.',
+        '고정 장면은 속도를 쓰지 않고 가운데에 멈춰 있습니다. 화면보다 긴 글자는 '
+        '화면에 맞게 줄어듭니다.',
       ),
     SwitchListTile(
       contentPadding: EdgeInsets.zero,

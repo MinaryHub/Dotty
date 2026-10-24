@@ -125,9 +125,7 @@ void main() {
     }
   });
 
-  testWidgets('still text shrinks a little to fit, never to mush', (
-    tester,
-  ) async {
+  testWidgets('still text shrinks to fit the panel', (tester) async {
     await tester.runAsync(() async {
       final wide = await rasterizeText('WWWWWWWWWW', rows: 12);
       // Slightly too wide: shrunk to fit.
@@ -139,9 +137,10 @@ void main() {
       );
       expect(fitted.width, lessThanOrEqualTo(limit));
       expect(fitted.litCount, greaterThan(0));
-      // Far too wide: kept legible (the display scrolls it instead).
-      final kept = await rasterizeText('WWWWWWWWWW', rows: 12, maxWidth: 40);
-      expect(kept.width, wide.width);
+      // Far too wide: still shrunk to fit, since still text never scrolls.
+      final small = await rasterizeText('WWWWWWWWWW', rows: 12, maxWidth: 40);
+      expect(small.width, lessThanOrEqualTo(40));
+      expect(small.litCount, greaterThan(0));
     });
   });
 }
