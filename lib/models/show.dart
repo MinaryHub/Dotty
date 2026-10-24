@@ -17,7 +17,7 @@ enum ImageColorMode { original, mono }
 enum DurationMode { seconds, passes }
 
 /// How a scene enters the display.
-enum SceneTransition { cut, fade, slideLeft, slideUp }
+enum SceneTransition { cut, fade, slideLeft, slideUp, flip }
 
 /// Settings of the physical sign, shared by every scene.
 @immutable
@@ -296,7 +296,7 @@ class Show {
         blink: true,
         durationMode: DurationMode.seconds,
         durationSeconds: 3,
-        transition: SceneTransition.slideLeft,
+        transition: SceneTransition.flip,
       ),
     ],
   );

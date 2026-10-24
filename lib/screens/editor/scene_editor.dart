@@ -328,6 +328,7 @@ class _SceneEditorState extends State<SceneEditor> {
             '옆으로 밀기',
           ),
           (SceneTransition.slideUp, Icons.keyboard_double_arrow_up, '위로 밀기'),
+          (SceneTransition.flip, Icons.flip, '플립'),
         ],
         selected: s.transition,
         onSelected: (v) => _update((s) => s.copyWith(transition: v)),

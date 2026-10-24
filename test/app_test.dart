@@ -3,6 +3,7 @@ import 'package:dotty/dot_matrix/show_player.dart';
 import 'package:dotty/main.dart';
 import 'package:dotty/models/show.dart';
 import 'package:dotty/models/show_store.dart';
+import 'package:dotty/screens/sign_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -70,5 +71,55 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1000));
     await tester.pump(const Duration(milliseconds: 16));
     expect(changes, [1, 0]);
+  });
+
+  testWidgets('flip transition shows both scenes, then only the new one', (
+    tester,
+  ) async {
+    final show = Show(
+      panel: const PanelSettings(transitionMs: 100),
+      scenes: [
+        for (final id in ['a', 'b'])
+          Scene(
+            id: id,
+            text: id,
+            direction: MarqueeDirection.none,
+            durationMode: DurationMode.seconds,
+            durationSeconds: 1,
+            transition: SceneTransition.flip,
+          ),
+      ],
+    );
+    await tester.pumpWidget(MaterialApp(home: ShowPlayer(show: show)));
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(const Duration(milliseconds: 600));
+
+    final flipping = tester
+        .widgetList<DotMatrixDisplay>(find.byType(DotMatrixDisplay))
+        .toList();
+    expect(flipping, hasLength(2));
+    expect(flipping.every((d) => d.flip != null), isTrue);
+
+    // Flip runs 2.5x the panel transition time.
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 16));
+    final settled = tester.widget<DotMatrixDisplay>(
+      find.byType(DotMatrixDisplay),
+    );
+    expect(settled.scene.id, 'b');
+    expect(settled.flip, isNull);
+  });
+
+  testWidgets('fullscreen sign fills the whole screen', (tester) async {
+    tester.view.physicalSize = const Size(1600, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(home: SignScreen(store: ShowStore.memory())),
+    );
+    await tester.pump();
+    expect(tester.getSize(find.byType(ShowPlayer)), const Size(1600, 900));
+    // Let the controls' auto-hide timer finish.
+    await tester.pump(const Duration(seconds: 4));
   });
 }
