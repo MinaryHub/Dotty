@@ -478,36 +478,75 @@ class DotMatrixPainter extends CustomPainter {
       );
     }
 
-    // Moving discs: squeezed to their angle, darker edge-on.
+    // Moving discs turn in 3D about their horizontal axle (the line drawn
+    // across each face), seen in perspective. Their edge stays visible as
+    // a dark sliver when they are side-on, so a disc never just vanishes:
+    // it reads as a turning object, not a blink.
     final cellSize = sprites.cell * k;
+    final edgePaint = Paint();
     for (final i in moving) {
       final c = i % cols, r = i ~/ cols;
       final center = Offset(pitchX / 2 + c * pitchX, pitchY / 2 + r * pitchY);
-      final w = math.max(0.04, board.widthAt(i, now));
-      final dst = Rect.fromCenter(
-        center: center,
-        width: cellSize * w,
-        height: cellSize,
-      );
+      final angle = board.angleAt(i, now);
+      final lit = board.faceAt(i, now) == 1;
+      // Tilt of whichever face is towards the viewer (0 = face-on).
+      final tilt = angle < math.pi / 2 ? angle : angle - math.pi;
+      final facing = math.cos(tilt).abs();
+      final side = math.sin(tilt).abs();
+
+      // Shadow on the board, shrinking as the disc stands up.
       canvas.drawImageRect(
         sprites.image,
         shadowSrc,
-        dst.shift(Offset(dot * 0.04 * (1 - w), 0)),
+        Rect.fromCenter(
+          center: center,
+          width: cellSize,
+          height: cellSize * math.max(0.15, facing),
+        ),
         atlasPaint,
       );
-      final light = board.tint[i] * (0.45 + 0.55 * w);
-      final lit = board.faceAt(i, now) == 1;
+
+      // The disc's rim: its thickness shows as it turns.
+      final thickness = dot * 0.09;
+      edgePaint.color = Color(_shade(0xFF2A2A2A, board.tint[i]));
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: center,
+            width: dot * (0.9 + 0.08 * facing),
+            height: dot * facing + thickness * side,
+          ),
+          Radius.circular(dot * 0.5 * math.max(0.1, facing)),
+        ),
+        edgePaint,
+      );
+
+      // Light: dimmer as the face turns away, with a glint as it passes
+      // the angle that catches the room light.
+      final glint = 1 + 0.45 * math.exp(-math.pow(tilt.abs() - 0.55, 2) / 0.02);
+      final light = board.tint[i] * (0.4 + 0.6 * facing) * glint;
       final color = lit
           ? _shade(faceColor(c, r, center.dx), light)
           : _shade(0xFFFFFFFF, backLevel * light);
+
+      canvas.save();
+      canvas.translate(center.dx, center.dy);
+      canvas.transform(
+        (Matrix4.identity()
+              // Perspective: the near edge grows, the far edge shrinks.
+              ..setEntry(3, 2, 1 / (dot * 3))
+              ..rotateX(tilt))
+            .storage,
+      );
       canvas.drawImageRect(
         sprites.image,
         lit ? faceSrc : backSrc,
-        dst,
+        Rect.fromCenter(center: Offset.zero, width: cellSize, height: cellSize),
         Paint()
           ..filterQuality = FilterQuality.medium
           ..colorFilter = ColorFilter.mode(Color(color), BlendMode.modulate),
       );
+      canvas.restore();
     }
 
     // Room light: brighter from the top left, falling off towards the
