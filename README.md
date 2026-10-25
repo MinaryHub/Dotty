@@ -135,4 +135,5 @@ lib/
   platform/screen_mode.dart       창/브라우저 전체 화면, 화면 꺼짐 방지
 web/                              웹 진입점, PWA manifest, 아이콘
 vercel.json, scripts/vercel-build.sh  Vercel 배포 설정
+assets/logo.png                   앱 로고 (tool/make_icons.py가 모든 플랫폼 아이콘과 함께 생성)
 ```
