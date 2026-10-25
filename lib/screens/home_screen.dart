@@ -124,7 +124,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Dotty'),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset('assets/logo.png', width: 30, height: 30),
+            const SizedBox(width: 10),
+            const Flexible(
+              child: Text('Dotty', overflow: TextOverflow.ellipsis),
+            ),
+          ],
+        ),
         actions: [
           // Named in the language it switches to; just an icon on phones,
           // where the app bar is short of room.
