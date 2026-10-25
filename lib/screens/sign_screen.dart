@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../dot_matrix/show_player.dart';
+import '../l10n.dart';
 import '../models/show_store.dart';
 import '../platform/screen_mode.dart';
 
@@ -101,7 +102,7 @@ class _SignScreenState extends State<SignScreen> {
                             children: [
                               _RoundButton(
                                 icon: Icons.close,
-                                tooltip: '닫기 (Esc)',
+                                tooltip: context.tr('Close (Esc)', '닫기 (Esc)'),
                                 onPressed: () =>
                                     Navigator.of(context).maybePop(),
                               ),
@@ -110,7 +111,10 @@ class _SignScreenState extends State<SignScreen> {
                                 // If the browser left fullscreen (e.g. its own
                                 // Esc), this brings it back.
                                 icon: Icons.fullscreen,
-                                tooltip: '화면 꽉 채우기',
+                                tooltip: context.tr(
+                                  'Fill the screen',
+                                  '화면 꽉 채우기',
+                                ),
                                 onPressed: () {
                                   enterSignMode();
                                   _scheduleHide();
@@ -120,8 +124,11 @@ class _SignScreenState extends State<SignScreen> {
                               _RoundButton(
                                 icon: _paused ? Icons.play_arrow : Icons.pause,
                                 tooltip: _paused
-                                    ? '재생 (Space)'
-                                    : '일시정지 (Space)',
+                                    ? context.tr('Play (Space)', '재생 (Space)')
+                                    : context.tr(
+                                        'Pause (Space)',
+                                        '일시정지 (Space)',
+                                      ),
                                 onPressed: _togglePause,
                               ),
                             ],

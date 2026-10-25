@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../dot_matrix/dot_matrix_display.dart';
+import '../../l10n.dart';
 import '../../models/show.dart';
 import '../../models/show_store.dart';
 import 'scene_editor.dart';
@@ -26,14 +27,14 @@ class SceneStrip extends StatelessWidget {
   final ValueChanged<String> onSelect;
 
   /// Adds a scene after the selection and selects it.
-  void _add(SceneKind kind, {Uint8List? image}) {
+  void _add(BuildContext context, SceneKind kind, {Uint8List? image}) {
     final id = newSceneId();
     store.addScene(
       Scene(
         id: id,
         kind: kind,
         image: image,
-        text: kind == SceneKind.text ? '새 장면' : '',
+        text: kind == SceneKind.text ? context.tr('New scene', '새 장면') : '',
         direction: kind == SceneKind.text
             ? MarqueeDirection.left
             : MarqueeDirection.none,
@@ -52,7 +53,9 @@ class SceneStrip extends StatelessWidget {
   /// Picks first and only adds the scene if an image was chosen.
   Future<void> _addImage(BuildContext context) async {
     final image = await pickImageWithFeedback(context);
-    if (image != null) _add(SceneKind.image, image: image);
+    if (image != null && context.mounted) {
+      _add(context, SceneKind.image, image: image);
+    }
   }
 
   @override
@@ -107,20 +110,20 @@ class SceneStrip extends StatelessWidget {
                   children: [
                     _AddButton(
                       icon: Icons.text_fields,
-                      label: '문구 추가',
-                      onPressed: () => _add(SceneKind.text),
+                      label: context.tr('Add text', '문구 추가'),
+                      onPressed: () => _add(context, SceneKind.text),
                     ),
                     const SizedBox(height: 4),
                     _AddButton(
                       icon: Icons.add_photo_alternate_outlined,
-                      label: '이미지 추가',
+                      label: context.tr('Add image', '이미지 추가'),
                       onPressed: () => _addImage(context),
                     ),
                     const SizedBox(height: 4),
                     _AddButton(
                       icon: Icons.schedule,
-                      label: '시계 추가',
-                      onPressed: () => _add(SceneKind.clock),
+                      label: context.tr('Add clock', '시계 추가'),
+                      onPressed: () => _add(context, SceneKind.clock),
                     ),
                   ],
                 ),
@@ -193,9 +196,12 @@ class _SceneCard extends StatelessWidget {
   final VoidCallback onDuplicate;
   final VoidCallback onDelete;
 
-  String get _timing => scene.usesPasses
-      ? '스크롤 ${scene.passes}회'
-      : '${scene.durationSeconds.round()}초';
+  String _timing(BuildContext context) => scene.usesPasses
+      ? context.tr('Scroll ${scene.passes}×', '스크롤 ${scene.passes}회')
+      : context.tr(
+          '${scene.durationSeconds.round()} s',
+          '${scene.durationSeconds.round()}초',
+        );
 
   @override
   Widget build(BuildContext context) {
@@ -253,13 +259,13 @@ class _SceneCard extends StatelessWidget {
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          _timing,
+                          _timing(context),
                           style: Theme.of(context).textTheme.bodySmall,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       PopupMenuButton<_CardAction>(
-                        tooltip: '장면 메뉴',
+                        tooltip: context.tr('Scene menu', '장면 메뉴'),
                         iconSize: 18,
                         padding: EdgeInsets.zero,
                         onSelected: (a) => switch (a) {
@@ -272,21 +278,21 @@ class _SceneCard extends StatelessWidget {
                           PopupMenuItem(
                             value: _CardAction.left,
                             enabled: index > 0,
-                            child: const Text('앞으로 이동'),
+                            child: Text(context.tr('Move earlier', '앞으로 이동')),
                           ),
                           PopupMenuItem(
                             value: _CardAction.right,
                             enabled: index < count - 1,
-                            child: const Text('뒤로 이동'),
+                            child: Text(context.tr('Move later', '뒤로 이동')),
                           ),
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: _CardAction.duplicate,
-                            child: Text('복제'),
+                            child: Text(context.tr('Duplicate', '복제')),
                           ),
                           PopupMenuItem(
                             value: _CardAction.delete,
                             enabled: count > 1,
-                            child: const Text('삭제'),
+                            child: Text(context.tr('Delete', '삭제')),
                           ),
                         ],
                       ),

@@ -11,7 +11,7 @@ class UnsupportedImageException implements Exception {}
 /// or null if the picker was cancelled.
 Future<Uint8List?> pickImage() async {
   const images = XTypeGroup(
-    label: '이미지',
+    label: 'Images',
     extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'],
     mimeTypes: [
       'image/png',

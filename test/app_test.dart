@@ -1,6 +1,7 @@
 import 'package:dotty/dot_matrix/dot_matrix_display.dart';
 import 'package:dotty/dot_matrix/dot_matrix_painter.dart';
 import 'package:dotty/dot_matrix/show_player.dart';
+import 'package:dotty/l10n.dart';
 import 'package:dotty/main.dart';
 import 'package:dotty/models/show.dart';
 import 'package:dotty/models/show_store.dart';
@@ -15,7 +16,9 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final store = ShowStore.memory();
-    await tester.pumpWidget(DottyApp(store: store));
+    await tester.pumpWidget(
+      DottyApp(store: store, language: LanguageController()),
+    );
     await tester.pump();
 
     expect(find.text('Dotty'), findsOneWidget);
@@ -25,11 +28,34 @@ void main() {
 
     // Adding a scene inserts it after the selection and selects it.
     final count = store.value.scenes.length;
-    await tester.tap(find.text('문구 추가'));
+    await tester.tap(find.text('Add text'));
     await tester.pump();
     expect(store.value.scenes.length, count + 1);
-    expect(store.value.scenes[1].text, '새 장면');
-    expect(find.widgetWithText(TextField, '새 장면'), findsOneWidget);
+    expect(store.value.scenes[1].text, 'New scene');
+    expect(find.widgetWithText(TextField, 'New scene'), findsOneWidget);
+  });
+
+  testWidgets('the interface switches between English and Korean', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final language = LanguageController();
+    await tester.pumpWidget(
+      DottyApp(store: ShowStore.memory(), language: language),
+    );
+    await tester.pump();
+
+    expect(find.text('Fullscreen'), findsOneWidget);
+    await tester.tap(find.text('한국어'));
+    await tester.pump();
+    expect(language.value, AppLanguage.ko);
+    expect(find.text('전체 화면'), findsOneWidget);
+    expect(find.text('문구 추가'), findsOneWidget);
+    await tester.tap(find.text('English'));
+    await tester.pump();
+    expect(find.text('Fullscreen'), findsOneWidget);
   });
 
   testWidgets('player advances through scenes and loops', (tester) async {
@@ -169,7 +195,9 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final store = ShowStore.memory();
-    await tester.pumpWidget(DottyApp(store: store));
+    await tester.pumpWidget(
+      DottyApp(store: store, language: LanguageController()),
+    );
     await tester.pump();
 
     DotMatrixDisplay mainDisplay() => tester
@@ -183,7 +211,7 @@ void main() {
       closeTo(previewColumns / rows, 0.02),
     );
 
-    await tester.tap(find.text('전체 화면'));
+    await tester.tap(find.text('Fullscreen'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     final sign = find.descendant(
@@ -212,7 +240,9 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final store = ShowStore.memory();
-    await tester.pumpWidget(DottyApp(store: store));
+    await tester.pumpWidget(
+      DottyApp(store: store, language: LanguageController()),
+    );
     await tester.pump();
 
     ShowPlayer signPlayer() => tester.widget<ShowPlayer>(
@@ -223,7 +253,7 @@ void main() {
     );
 
     // Default: just the selected (first) scene.
-    await tester.tap(find.text('전체 화면'));
+    await tester.tap(find.text('Fullscreen'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(signPlayer().soloSceneId, store.value.scenes.first.id);
@@ -232,9 +262,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
 
     // Continuous play on: the whole show.
-    await tester.tap(find.text('연속 재생'));
+    await tester.tap(find.text('Play all'));
     await tester.pump();
-    await tester.tap(find.text('전체 화면'));
+    await tester.tap(find.text('Fullscreen'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(signPlayer().soloSceneId, isNull);
