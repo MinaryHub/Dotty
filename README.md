@@ -54,6 +54,8 @@ Flutter로 만들어 하나의 코드로 **웹(Vercel) · Windows · macOS · Li
   웹은 브라우저 전체 화면, Android는 몰입 모드(카메라 노치 영역까지 사용)
   - 화면 탭: 버튼 표시/숨김 · `Esc`: 나가기 · `Space`: 일시정지 · ⛶ 버튼: 다시 꽉 채우기
   - iPhone Safari는 웹 전체 화면을 지원하지 않으므로 공유 → 홈 화면에 추가 후 실행하세요.
+- **화면 언어**: 기본은 영어이며, 상단의 언어 버튼(문A 아이콘)으로 한국어 ↔ 영어를 바꿀 수 있습니다
+  (선택은 저장됨). 전광판에 표시되는 문구나 시계의 오전/오후는 번역하지 않습니다.
 - 모든 장면과 설정(이미지 포함)은 자동 저장되어 다음 실행 때 그대로 복원됩니다.
   웹은 브라우저 저장소에 저장되므로 기기·브라우저마다 따로 저장됩니다.
 
@@ -113,6 +115,7 @@ GitHub Actions(`.github/workflows/build.yml`)가 push / PR마다 테스트를 �
 ```
 lib/
   main.dart                       앱 진입점
+  l10n.dart                       화면 언어 (영어/한국어) 전환
   models/show.dart                쇼(패널 + 장면 목록) 데이터 + JSON 직렬화
   models/show_store.dart          쇼 상태 관리 및 저장
   dot_matrix/dot_bitmap.dart      문구/이미지 → 도트 비트맵 변환

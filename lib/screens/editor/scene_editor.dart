@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../l10n.dart';
 import '../../models/show.dart';
 import '../../models/show_store.dart';
 import '../../platform/image_import.dart';
@@ -24,14 +25,17 @@ const _presets = [
 /// during the click's user gesture.
 Future<Uint8List?> pickImageWithFeedback(BuildContext context) async {
   final messenger = ScaffoldMessenger.of(context);
+  final unsupported = context.tr(
+    'This image format can\'t be opened.',
+    '이 이미지 형식은 열 수 없습니다.',
+  );
+  final failed = context.tr('Couldn\'t load the image', '이미지를 불러오지 못했습니다');
   try {
     return await pickImage();
   } on UnsupportedImageException {
-    messenger.showSnackBar(
-      const SnackBar(content: Text('이 이미지 형식은 열 수 없습니다.')),
-    );
+    messenger.showSnackBar(SnackBar(content: Text(unsupported)));
   } catch (e) {
-    messenger.showSnackBar(SnackBar(content: Text('이미지를 불러오지 못했습니다: $e')));
+    messenger.showSnackBar(SnackBar(content: Text('$failed: $e')));
   }
   return null;
 }
@@ -93,23 +97,23 @@ class _SceneEditorState extends State<SceneEditor> {
         return ListView(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
           children: [
-            const SectionHeader('내용'),
+            SectionHeader(context.tr('Content', '내용')),
             SegmentedButton<SceneKind>(
-              segments: const [
+              segments: [
                 ButtonSegment(
                   value: SceneKind.text,
-                  icon: Icon(Icons.text_fields),
-                  label: Text('문구'),
+                  icon: const Icon(Icons.text_fields),
+                  label: Text(context.tr('Text', '문구')),
                 ),
                 ButtonSegment(
                   value: SceneKind.image,
-                  icon: Icon(Icons.image_outlined),
-                  label: Text('이미지'),
+                  icon: const Icon(Icons.image_outlined),
+                  label: Text(context.tr('Image', '이미지')),
                 ),
                 ButtonSegment(
                   value: SceneKind.clock,
-                  icon: Icon(Icons.schedule),
-                  label: Text('시계'),
+                  icon: const Icon(Icons.schedule),
+                  label: Text(context.tr('Clock', '시계')),
                 ),
               ],
               selected: {s.kind},
@@ -133,11 +137,11 @@ class _SceneEditorState extends State<SceneEditor> {
     TextField(
       controller: _text,
       decoration: InputDecoration(
-        hintText: '표시할 문구를 입력하세요',
+        hintText: context.tr('Type the text to show', '표시할 문구를 입력하세요'),
         border: const OutlineInputBorder(),
         suffixIcon: IconButton(
           icon: const Icon(Icons.clear),
-          tooltip: '지우기',
+          tooltip: context.tr('Clear', '지우기'),
           onPressed: () => _setText(''),
         ),
       ),
@@ -154,14 +158,14 @@ class _SceneEditorState extends State<SceneEditor> {
     ),
     SwitchListTile(
       contentPadding: EdgeInsets.zero,
-      title: const Text('굵은 글씨'),
+      title: Text(context.tr('Bold', '굵은 글씨')),
       value: s.bold,
       onChanged: (v) => _update((s) => s.copyWith(bold: v)),
     ),
   ];
 
   List<Widget> _clockFields(Scene s) => [
-    const FieldLabel('표시 형식'),
+    FieldLabel(context.tr('Format', '표시 형식')),
     ChoiceRow<ClockFormat>(
       options: const [
         (ClockFormat.hm, Icons.schedule, '14:05'),
@@ -172,13 +176,15 @@ class _SceneEditorState extends State<SceneEditor> {
       selected: s.clockFormat,
       onSelected: (v) => _update((s) => s.copyWith(clockFormat: v)),
     ),
-    const Hint(
-      '이 기기의 현재 시간을 보여 줍니다. 시간이 바뀔 때마다 갱신되고, 플립 도트에서는 '
-      '바뀐 숫자의 원판만 뒤집힙니다.',
+    Hint(
+      context.tr(
+        'Shows this device\'s current time, updated as it changes. With flip dots only the discs of changed digits flip.',
+        '이 기기의 현재 시간을 보여 줍니다. 시간이 바뀔 때마다 갱신되고, 플립 도트에서는 바뀐 숫자의 원판만 뒤집힙니다.',
+      ),
     ),
     SwitchListTile(
       contentPadding: EdgeInsets.zero,
-      title: const Text('굵은 글씨'),
+      title: Text(context.tr('Bold', '굵은 글씨')),
       value: s.bold,
       onChanged: (v) => _update((s) => s.copyWith(bold: v)),
     ),
@@ -215,25 +221,38 @@ class _SceneEditorState extends State<SceneEditor> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.upload_file),
-              label: Text(image == null ? '이미지 선택' : '이미지 변경'),
+              label: Text(
+                image == null
+                    ? context.tr('Choose image', '이미지 선택')
+                    : context.tr('Change image', '이미지 변경'),
+              ),
               onPressed: _importing ? null : _pickImage,
             ),
           ),
         ],
       ),
-      const Hint('PNG · JPG · GIF · WebP. 패널 높이에 맞춰 도트로 변환됩니다.'),
+      Hint(
+        context.tr(
+          'PNG · JPG · GIF · WebP, turned into dots to fit the panel height.',
+          'PNG · JPG · GIF · WebP. 패널 높이에 맞춰 도트로 변환됩니다.',
+        ),
+      ),
       const SizedBox(height: 12),
-      const FieldLabel('색상'),
+      FieldLabel(context.tr('Color', '색상')),
       ChoiceRow<ImageColorMode>(
-        options: const [
-          (ImageColorMode.original, Icons.palette_outlined, '원본 색'),
-          (ImageColorMode.mono, Icons.circle, '단색'),
+        options: [
+          (
+            ImageColorMode.original,
+            Icons.palette_outlined,
+            context.tr('Original', '원본 색'),
+          ),
+          (ImageColorMode.mono, Icons.circle, context.tr('Single color', '단색')),
         ],
         selected: s.imageColorMode,
         onSelected: (v) => _update((s) => s.copyWith(imageColorMode: v)),
       ),
       LabeledSlider(
-        label: '밝기 기준 (어두운 부분 끄기)',
+        label: context.tr('Threshold (dark parts off)', '밝기 기준 (어두운 부분 끄기)'),
         value: s.imageThreshold,
         min: 0,
         max: 0.9,
@@ -244,7 +263,7 @@ class _SceneEditorState extends State<SceneEditor> {
   }
 
   List<Widget> _colorFields(Scene s) => [
-    const SectionHeader('점 색상'),
+    SectionHeader(context.tr('Dot color', '점 색상')),
     ColorSwatches(
       colors: dotColors,
       selected: s.rainbow ? null : s.dotColor,
@@ -252,7 +271,7 @@ class _SceneEditorState extends State<SceneEditor> {
           _update((s) => s.copyWith(dotColor: c, rainbow: false)),
     ),
     LabeledSlider(
-      label: '색조',
+      label: context.tr('Hue', '색조'),
       value: HSVColor.fromColor(s.dotColor).hue,
       min: 0,
       max: 359,
@@ -266,48 +285,61 @@ class _SceneEditorState extends State<SceneEditor> {
     ),
     SwitchListTile(
       contentPadding: EdgeInsets.zero,
-      title: const Text('무지개 효과'),
+      title: Text(context.tr('Rainbow', '무지개 효과')),
       value: s.rainbow,
       onChanged: (v) => _update((s) => s.copyWith(rainbow: v)),
     ),
   ];
 
   List<Widget> _motionFields(Scene s) => [
-    const SectionHeader('움직임'),
+    SectionHeader(context.tr('Motion', '움직임')),
     ChoiceRow<MarqueeDirection>(
-      options: const [
-        (MarqueeDirection.left, Icons.arrow_back, '왼쪽으로'),
-        (MarqueeDirection.none, Icons.pause, '고정'),
-        (MarqueeDirection.right, Icons.arrow_forward, '오른쪽으로'),
+      options: [
+        (MarqueeDirection.left, Icons.arrow_back, context.tr('Left', '왼쪽으로')),
+        (MarqueeDirection.none, Icons.pause, context.tr('Still', '고정')),
+        (
+          MarqueeDirection.right,
+          Icons.arrow_forward,
+          context.tr('Right', '오른쪽으로'),
+        ),
       ],
       selected: s.direction,
       onSelected: (v) => _update((s) => s.copyWith(direction: v)),
     ),
     LabeledSlider(
-      label: '속도',
+      label: context.tr('Speed', '속도'),
       value: s.speed,
       min: 0,
       max: 120,
-      display: (v) => v.round() == 0 ? '0 (멈춤)' : '${v.round()} 칸/초',
+      display: (v) => v.round() == 0
+          ? context.tr('0 (stopped)', '0 (멈춤)')
+          : context.tr('${v.round()} dots/s', '${v.round()} 칸/초'),
       onChanged: s.direction == MarqueeDirection.none
           ? null
           : (v) => _update((s) => s.copyWith(speed: v.roundToDouble())),
     ),
     if (s.speed <= 0 && s.direction != MarqueeDirection.none)
-      const Hint('속도 0: 글자가 흐르지 않고 가운데에 멈춰 있습니다.'),
+      Hint(
+        context.tr(
+          'Speed 0: the text stays still in the middle.',
+          '속도 0: 글자가 흐르지 않고 가운데에 멈춰 있습니다.',
+        ),
+      ),
     if (s.direction == MarqueeDirection.none)
-      const Hint(
-        '고정 장면은 속도를 쓰지 않고 가운데에 멈춰 있습니다. 화면보다 긴 글자는 '
-        '화면에 맞게 줄어듭니다.',
+      Hint(
+        context.tr(
+          'A still scene ignores speed and stays in the middle. Text wider than the sign is shrunk to fit.',
+          '고정 장면은 속도를 쓰지 않고 가운데에 멈춰 있습니다. 화면보다 긴 글자는 화면에 맞게 줄어듭니다.',
+        ),
       ),
     SwitchListTile(
       contentPadding: EdgeInsets.zero,
-      title: const Text('깜빡임'),
+      title: Text(context.tr('Blink', '깜빡임')),
       value: s.blink,
       onChanged: (v) => _update((s) => s.copyWith(blink: v)),
     ),
     LabeledSlider(
-      label: '깜빡임 속도',
+      label: context.tr('Blink rate', '깜빡임 속도'),
       value: s.blinkHz,
       min: 0.5,
       max: 8,
@@ -319,59 +351,81 @@ class _SceneEditorState extends State<SceneEditor> {
   List<Widget> _timingFields(Scene s, Show show) {
     final scrolls = s.direction != MarqueeDirection.none;
     return [
-      const SectionHeader('장면 전환'),
-      const FieldLabel('다음 장면으로 넘어가는 시점'),
+      SectionHeader(context.tr('Scene change', '장면 전환')),
+      FieldLabel(context.tr('Move on to the next scene', '다음 장면으로 넘어가는 시점')),
       ChoiceRow<DurationMode>(
-        options: const [
-          (DurationMode.passes, Icons.repeat, '스크롤 완료 후'),
-          (DurationMode.seconds, Icons.timer_outlined, '시간 지정'),
+        options: [
+          (
+            DurationMode.passes,
+            Icons.repeat,
+            context.tr('After scrolling', '스크롤 완료 후'),
+          ),
+          (
+            DurationMode.seconds,
+            Icons.timer_outlined,
+            context.tr('After a time', '시간 지정'),
+          ),
         ],
         selected: s.durationMode,
         onSelected: (v) => _update((s) => s.copyWith(durationMode: v)),
       ),
       if (s.usesPasses)
         LabeledSlider(
-          label: '스크롤 횟수',
+          label: context.tr('Scroll passes', '스크롤 횟수'),
           value: s.passes.toDouble(),
           min: 1,
           max: 10,
           divisions: 9,
-          display: (v) => '${v.round()}회',
+          display: (v) => context.tr('${v.round()}×', '${v.round()}회'),
           onChanged: (v) => _update((s) => s.copyWith(passes: v.round())),
         )
       else ...[
         LabeledSlider(
-          label: '표시 시간',
+          label: context.tr('Show for', '표시 시간'),
           value: s.durationSeconds,
           min: 1,
           max: 60,
           divisions: 59,
-          display: (v) => '${v.round()}초',
+          display: (v) => context.tr('${v.round()} s', '${v.round()}초'),
           onChanged: (v) =>
               _update((s) => s.copyWith(durationSeconds: v.roundToDouble())),
         ),
         if (s.durationMode == DurationMode.passes && !scrolls)
-          const Hint('고정된 장면은 스크롤 횟수 대신 표시 시간을 사용합니다.'),
+          Hint(
+            context.tr(
+              'A still scene uses the time instead of scroll passes.',
+              '고정된 장면은 스크롤 횟수 대신 표시 시간을 사용합니다.',
+            ),
+          ),
       ],
       const SizedBox(height: 8),
-      const FieldLabel('이 장면이 나타나는 효과'),
+      FieldLabel(context.tr('How this scene appears', '이 장면이 나타나는 효과')),
       ChoiceRow<SceneTransition>(
-        options: const [
-          (SceneTransition.cut, Icons.flash_on, '바로'),
-          (SceneTransition.fade, Icons.gradient, '페이드'),
+        options: [
+          (SceneTransition.cut, Icons.flash_on, context.tr('Cut', '바로')),
+          (SceneTransition.fade, Icons.gradient, context.tr('Fade', '페이드')),
           (
             SceneTransition.slideLeft,
             Icons.keyboard_double_arrow_left,
-            '옆으로 밀기',
+            context.tr('Slide', '옆으로 밀기'),
           ),
-          (SceneTransition.slideUp, Icons.keyboard_double_arrow_up, '위로 밀기'),
-          (SceneTransition.flip, Icons.flip, '플립'),
+          (
+            SceneTransition.slideUp,
+            Icons.keyboard_double_arrow_up,
+            context.tr('Slide up', '위로 밀기'),
+          ),
+          (SceneTransition.flip, Icons.flip, context.tr('Flip', '플립')),
         ],
         selected: s.transition,
         onSelected: (v) => _update((s) => s.copyWith(transition: v)),
       ),
       if (show.scenes.length == 1)
-        const Hint('장면이 하나뿐이면 전환 없이 계속 반복됩니다. 아래 + 버튼으로 장면을 추가하세요.'),
+        Hint(
+          context.tr(
+            'With only one scene it simply repeats. Add scenes with the buttons below the preview.',
+            '장면이 하나뿐이면 전환 없이 계속 반복됩니다. 아래 + 버튼으로 장면을 추가하세요.',
+          ),
+        ),
     ];
   }
 }

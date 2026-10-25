@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../dot_matrix/show_player.dart';
+import '../l10n.dart';
 import '../dot_matrix/sign_geometry.dart';
 import '../models/show_store.dart';
 import '../platform/screen_mode.dart';
@@ -99,10 +100,10 @@ class _HomeScreenState extends State<HomeScreen> {
       length: 2,
       child: Column(
         children: [
-          const TabBar(
+          TabBar(
             tabs: [
-              Tab(text: '선택한 장면'),
-              Tab(text: '패널 (공통)'),
+              Tab(text: context.tr('Selected scene', '선택한 장면')),
+              Tab(text: context.tr('Panel (all scenes)', '패널 (공통)')),
             ],
           ),
           Expanded(
@@ -125,11 +126,32 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('Dotty'),
         actions: [
+          // Named in the language it switches to; just an icon on phones,
+          // where the app bar is short of room.
+          if (MediaQuery.sizeOf(context).width < 600)
+            IconButton(
+              icon: const Icon(Icons.translate),
+              tooltip: context.tr('한국어', 'English'),
+              onPressed: LanguageScope.maybeOf(context)?.toggle,
+            )
+          else
+            TextButton.icon(
+              icon: const Icon(Icons.translate, size: 18),
+              label: Text(context.tr('한국어', 'English')),
+              onPressed: LanguageScope.maybeOf(context)?.toggle,
+            ),
+          const SizedBox(width: 4),
           Tooltip(
-            message: _playAll ? '선택한 장면만 미리보기' : '모든 장면을 순서대로 미리보기',
+            message: _playAll
+                ? context.tr('Preview only the selected scene', '선택한 장면만 미리보기')
+                : context.tr('Preview all scenes in order', '모든 장면을 순서대로 미리보기'),
             child: OutlinedButton.icon(
               icon: Icon(_playAll ? Icons.stop : Icons.playlist_play),
-              label: Text(_playAll ? '연속 재생 끄기' : '연속 재생'),
+              label: Text(
+                _playAll
+                    ? context.tr('Stop play all', '연속 재생 끄기')
+                    : context.tr('Play all', '연속 재생'),
+              ),
               onPressed: () => setState(() {
                 _playAll = !_playAll;
                 _playingIndex = _playAll ? 0 : null;
@@ -140,10 +162,18 @@ class _HomeScreenState extends State<HomeScreen> {
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: Tooltip(
-              message: _playAll ? '모든 장면을 순서대로 전체 화면으로' : '선택한 장면만 전체 화면으로',
+              message: _playAll
+                  ? context.tr(
+                      'All scenes in order, fullscreen',
+                      '모든 장면을 순서대로 전체 화면으로',
+                    )
+                  : context.tr(
+                      'Only the selected scene, fullscreen',
+                      '선택한 장면만 전체 화면으로',
+                    ),
               child: FilledButton.icon(
                 icon: const Icon(Icons.fullscreen),
-                label: const Text('전체 화면'),
+                label: Text(context.tr('Fullscreen', '전체 화면')),
                 onPressed: _openSign,
               ),
             ),
