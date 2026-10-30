@@ -101,6 +101,46 @@ void main() {
     expect(changes, [1, 0]);
   });
 
+  for (final transition in [SceneTransition.diagonal, SceneTransition.fade]) {
+    testWidgets('a scene shown again on its own plays its ${transition.name} '
+        'transition', (tester) async {
+      final show = Show(
+        panel: const PanelSettings(transitionMs: 100),
+        scenes: [
+          Scene(
+            id: 'a',
+            text: 'A',
+            direction: MarqueeDirection.none,
+            durationMode: DurationMode.seconds,
+            durationSeconds: 1,
+            transition: transition,
+          ),
+          const Scene(id: 'b', text: 'B'),
+        ],
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ShowPlayer(show: show, soloSceneId: 'a'),
+        ),
+      );
+      // Scenes on screen (not the blank board under a diagonal move).
+      List<DotMatrixDisplay> displays() => tester
+          .widgetList<DotMatrixDisplay>(find.byType(DotMatrixDisplay))
+          .where((d) => d.scene.id != 'blank')
+          .toList();
+
+      expect(displays().single.entry, 0);
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump(const Duration(milliseconds: 600));
+      // The same scene again, entering over its previous showing.
+      expect(displays().map((d) => d.scene.id), ['a', 'a']);
+      expect(displays().map((d) => d.entry), [0, 1]);
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(displays().single.entry, 1);
+    });
+  }
+
   testWidgets('flip transition shows both scenes, then only the new one', (
     tester,
   ) async {

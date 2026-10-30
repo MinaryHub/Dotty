@@ -488,18 +488,24 @@ class _SceneEditorState extends State<SceneEditor> {
             Icons.keyboard_double_arrow_up,
             context.tr('Slide up', '위로 밀기'),
           ),
+          (
+            SceneTransition.diagonal,
+            Icons.south_east,
+            context.tr('Diagonal', '대각선'),
+          ),
           (SceneTransition.flip, Icons.flip, context.tr('Flip', '플립')),
         ],
         selected: s.transition,
         onSelected: (v) => _update((s) => s.copyWith(transition: v)),
       ),
-      if (show.scenes.length == 1)
-        Hint(
-          context.tr(
-            'With only one scene it simply repeats. Add scenes with the buttons below the preview.',
-            '장면이 하나뿐이면 전환 없이 계속 반복됩니다. 아래 + 버튼으로 장면을 추가하세요.',
-          ),
+      Hint(
+        context.tr(
+          'Also used each time the scene comes back on its own (an only '
+              'scene, or a single scene in preview or fullscreen).',
+          '같은 장면이 다시 나올 때도 (장면이 하나뿐이거나, 미리보기·전체 화면에서 '
+              '선택한 장면만 반복할 때) 이 효과로 나타납니다.',
         ),
+      ),
     ];
   }
 }

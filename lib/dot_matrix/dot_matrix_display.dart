@@ -71,6 +71,10 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
   /// [_seconds] when the shown scene came up.
   double _shownAt = 0;
 
+  /// A still scene shown again in a row has nothing to turn over to, so its
+  /// discs flip over and back in the pattern of its transition instead.
+  SceneTransition? _repeatWave;
+
   /// The scene whose content [_bitmap] holds. It lags [DotMatrixDisplay.scene]
   /// while a newly given scene is being rasterized, so the board keeps
   /// showing the old one instead of going blank.
@@ -192,6 +196,7 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
         _passes = 0;
         _shownAt = _seconds;
         _pendingWave = s.transition;
+        _repeatWave = s.id == _shown.id ? s.transition : null;
       }
       _shown = s;
       _shownEntry = entry;
@@ -259,20 +264,30 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
       scroll: _scroll,
       direction: look.direction,
     );
+    final span = widget.panel.transitionMs / 1000 * 1.2;
     final target = Uint8List(cols * rows);
     final still = look.direction == MarqueeDirection.none;
     final since = _seconds - _shownAt;
+    // A repeated still scene: each disc turns over as the wave reaches it
+    // and back a moment later.
+    final repeat = still ? _repeatWave : null;
+    final hold = math.max(0.35, widget.panel.flipSeconds * 1.2);
+    if (repeat != null && since > span + hold) _repeatWave = null;
     for (var c = 0; c < cols; c++) {
       final flipped = still && look.flippedAt(since, c, cols);
       for (var r = 0; r < rows; r++) {
+        var inverted = flipped;
+        if (repeat != null && repeat != SceneTransition.cut) {
+          final w = since - _waveDelay(repeat, c, r, cols, rows, span);
+          if (w >= 0 && w < hold) inverted = !inverted;
+        }
         final on = lit && bitmap.isOn(c + shift, r);
-        if (on != flipped) target[r * cols + c] = 1;
+        if (on != inverted) target[r * cols + c] = 1;
       }
     }
 
     final wave = _pendingWave;
     _pendingWave = null;
-    final span = widget.panel.transitionMs / 1000 * 1.2;
     double delayOf(int c, int r) {
       // The driver scans the board column by column, and each coil fires
       // with a few ms of scatter.
@@ -280,14 +295,7 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
       final jitter = _hash(c, r, 1) * 0.025;
       return scan +
           jitter +
-          switch (wave) {
-            null || SceneTransition.cut => 0,
-            SceneTransition.fade => _hash(c, r, 2) * span,
-            SceneTransition.slideUp =>
-              (rows - 1 - r) / math.max(1, rows - 1) * span * 0.7,
-            SceneTransition.slideLeft ||
-            SceneTransition.flip => c / math.max(1, cols - 1) * span,
-          };
+          (wave == null ? 0 : _waveDelay(wave, c, r, cols, rows, span));
     }
 
     // While text scrolls, discs flip at every column step; past a few
@@ -326,6 +334,27 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
       final landing = FlipBoard.turnSeconds * _board.timeScale;
       buckets.forEach((b, count) => player.click(count, b * 0.01 + landing));
     }
+  }
+
+  /// When disc ([c], [r]) turns in a scene change with [transition], as a
+  /// wave taking [span] seconds to cross the board.
+  static double _waveDelay(
+    SceneTransition transition,
+    int c,
+    int r,
+    int cols,
+    int rows,
+    double span,
+  ) {
+    final x = c / math.max(1, cols - 1), y = r / math.max(1, rows - 1);
+    return switch (transition) {
+      SceneTransition.cut => 0,
+      SceneTransition.fade => _hash(c, r, 2) * span,
+      SceneTransition.slideUp => (1 - y) * span * 0.7,
+      // From the top left corner to the bottom right one.
+      SceneTransition.diagonal => (x + y) / 2 * span,
+      SceneTransition.slideLeft || SceneTransition.flip => x * span,
+    };
   }
 
   static String _clockKey(DateTime time, ClockFormat format) =>

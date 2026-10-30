@@ -59,9 +59,16 @@ class _ShowPlayerState extends State<ShowPlayer>
 
   List<Scene> get _scenes => widget.show.scenes;
 
-  Scene get _current => _scenes[_index % _scenes.length];
+  int get _soloIndex {
+    final id = widget.soloSceneId;
+    return id == null ? -1 : widget.show.indexOf(id);
+  }
 
-  bool get _advances => widget.soloSceneId == null && _scenes.length > 1;
+  /// The scene playing now; a solo scene plays over and over.
+  Scene get _current {
+    final solo = _soloIndex;
+    return solo >= 0 ? _scenes[solo] : _scenes[_index % _scenes.length];
+  }
 
   /// A flip wave needs longer than a fade or slide to read well.
   double get _transitionMs =>
@@ -100,22 +107,23 @@ class _ShowPlayerState extends State<ShowPlayer>
       });
     }
 
-    if (!_advances) return;
     _elapsed += dt;
     final scene = _current;
     if (!scene.usesPasses && _elapsed >= scene.durationSeconds) _advance();
   }
 
   void _onPass(Scene scene, int passes) {
-    if (_advances && scene.id == _current.id && scene.usesPasses) {
+    if (scene.id == _current.id && scene.usesPasses) {
       if (passes >= scene.passes) _advance();
     }
   }
 
+  /// Moves on to the next scene, or shows the same one again (a solo or
+  /// only scene), with its entry transition either way.
   void _advance() {
     setState(() {
       final previous = _PlayingScene(_current, _entries);
-      _index = (_index + 1) % _scenes.length;
+      if (_soloIndex < 0) _index = (_index + 1) % _scenes.length;
       _entries++;
       _elapsed = 0;
       // A flip-dot board turns its own discs over to the next scene.
@@ -150,15 +158,10 @@ class _ShowPlayerState extends State<ShowPlayer>
 
   @override
   Widget build(BuildContext context) {
-    final soloIndex = widget.soloSceneId == null
-        ? -1
-        : widget.show.indexOf(widget.soloSceneId!);
-    final current = soloIndex >= 0
-        ? _PlayingScene(_scenes[soloIndex], -1)
-        : _PlayingScene(_current, _entries);
+    final current = _PlayingScene(_current, _entries);
     // Keep the outgoing scene's latest settings if it was edited meanwhile.
     final outgoing = _outgoing;
-    final out = outgoing == null || soloIndex >= 0
+    final out = outgoing == null
         ? null
         : _PlayingScene(
             _scenes.firstWhere(
@@ -204,12 +207,20 @@ class _ShowPlayerState extends State<ShowPlayer>
           double snap(double v, double pitch) => (v / pitch).round() * pitch;
 
           var inOffset = Offset.zero, outOffset = Offset.zero;
-          var inOpacity = 1.0;
+          var inOpacity = 1.0, outOpacity = 1.0;
           FlipState? inFlip, outFlip;
+          // The same scene again would fade into itself unseen: dip through
+          // dark instead.
+          final again = out != null && out.scene.id == current.scene.id;
           switch (current.scene.transition) {
             case SceneTransition.cut:
             case SceneTransition.fade:
-              inOpacity = t;
+              if (again) {
+                outOpacity = (1 - 2 * t).clamp(0.0, 1.0);
+                inOpacity = (2 * t - 1).clamp(0.0, 1.0);
+              } else {
+                inOpacity = t;
+              }
             case SceneTransition.slideLeft:
               final dx = snap(size.width * t, pitchX);
               outOffset = Offset(-dx, 0);
@@ -218,6 +229,12 @@ class _ShowPlayerState extends State<ShowPlayer>
               final dy = snap(size.height * t, pitchY);
               outOffset = Offset(0, -dy);
               inOffset = Offset(0, size.height - dy);
+            case SceneTransition.diagonal:
+              // In from the top left, out to the bottom right.
+              final dx = snap(size.width * t, pitchX);
+              final dy = snap(size.height * t, pitchY);
+              outOffset = Offset(dx, dy);
+              inOffset = Offset(dx - size.width, dy - size.height);
             case SceneTransition.flip:
               if (out != null) {
                 outFlip = FlipState(t, outgoing: true);
@@ -252,7 +269,24 @@ class _ShowPlayerState extends State<ShowPlayer>
               // Flipping scenes only paint their dots; they share this
               // background.
               ColoredBox(color: widget.show.panel.backgroundColor),
-              if (out != null) layer(out, outOffset, 1, outFlip),
+              // A diagonal move uncovers two corners: unlit dots there.
+              if (out != null &&
+                  current.scene.transition == SceneTransition.diagonal)
+                DotMatrixDisplay(
+                  key: const ValueKey('blank-board'),
+                  // Unlit dots tinted like the scene's own.
+                  scene: Scene(
+                    id: 'blank',
+                    text: '',
+                    dotColor: current.scene.usesDotColor
+                        ? current.scene.dotColor
+                        : const Color(0xFFBDBDBD),
+                  ),
+                  panel: widget.show.panel,
+                  columns: columns,
+                  paused: true,
+                ),
+              if (out != null) layer(out, outOffset, outOpacity, outFlip),
               layer(current, inOffset, inOpacity, inFlip),
             ],
           );
