@@ -33,6 +33,10 @@ class FlipBoard {
   /// future for staggered flips.
   Float64List _flipAt = Float64List(0);
 
+  /// Discs that keep their face but turn over and straight back (1): two
+  /// flips one after the other, so they join a wave without changing.
+  Uint8List _rev = Uint8List(0);
+
   /// Per-disc brightness (0.86..1) and resting tilt (radians): no two
   /// physical discs sit or reflect quite alike.
   Float32List tint = Float32List(0);
@@ -43,7 +47,9 @@ class FlipBoard {
   /// Brings the board to [target] (`cols * rows` faces, row by row).
   ///
   /// Discs whose face changes start turning at [now] plus `delayOf(c, r)`;
-  /// [onFlip] reports each one's delay (for sound). A new size resets the
+  /// [onFlip] reports each flip's delay (for sound). With [spinUnchanged],
+  /// discs that keep their face turn over and back in the same wave (two
+  /// flips each, the second [flipSeconds] later). A new size resets the
   /// board without animating.
   void update(
     Uint8List target,
@@ -52,6 +58,7 @@ class FlipBoard {
     double now, {
     required double Function(int c, int r) delayOf,
     void Function(double delay)? onFlip,
+    bool spinUnchanged = false,
   }) {
     assert(target.length == cols * rows);
     if (cols != this.cols || rows != this.rows) {
@@ -60,6 +67,7 @@ class FlipBoard {
       _target = Uint8List.fromList(target);
       _from = Uint8List.fromList(target);
       _flipAt = Float64List(target.length)..fillRange(0, target.length, -1e9);
+      _rev = Uint8List(target.length);
       tint = Float32List(target.length);
       tilt = Float32List(target.length);
       for (var i = 0; i < target.length; i++) {
@@ -71,10 +79,21 @@ class FlipBoard {
     }
     for (var i = 0; i < target.length; i++) {
       final face = target[i];
-      if (face == _target[i]) continue;
+      if (face == _target[i]) {
+        if (spinUnchanged && !movingAt(i, now)) {
+          final delay = delayOf(i % cols, i ~/ cols);
+          _rev[i] = 1;
+          _from[i] = face;
+          _flipAt[i] = now + delay;
+          onFlip?.call(delay);
+          onFlip?.call(delay + flipSeconds * timeScale);
+        }
+        continue;
+      }
       // A disc already on its way keeps turning from what it shows now.
       _from[i] = faceAt(i, now);
       _target[i] = face;
+      _rev[i] = 0;
       final delay = delayOf(i % cols, i ~/ cols);
       _flipAt[i] = now + delay;
       onFlip?.call(delay);
@@ -86,9 +105,11 @@ class FlipBoard {
     return v - v.floorToDouble();
   }
 
-  /// Rotation of disc [i] at [now], 0 (old face) to π (new face).
+  /// Rotation of disc [i] at [now], 0 (old face) to π (new face). A disc
+  /// that turns over and back goes through this twice.
   double angleAt(int i, double now) {
-    final t = (now - _flipAt[i]) / timeScale;
+    var t = (now - _flipAt[i]) / timeScale;
+    if (_rev[i] == 1 && t >= flipSeconds) t -= flipSeconds;
     if (t <= 0) return 0;
     if (t < turnSeconds) {
       // Pulled by the magnet: slow off the mark, fastest at the end.
@@ -105,15 +126,20 @@ class FlipBoard {
   }
 
   /// The face disc [i] shows at [now] (it swaps once past edge-on).
-  int faceAt(int i, double now) =>
-      angleAt(i, now) < math.pi / 2 ? _from[i] : _target[i];
+  int faceAt(int i, double now) {
+    final past = angleAt(i, now) >= math.pi / 2;
+    if (_rev[i] == 0) return past ? _target[i] : _from[i];
+    // Over and back: the other face during the first turn, then home.
+    final second = (now - _flipAt[i]) / timeScale >= flipSeconds;
+    return (past != second) ? 1 - _from[i] : _from[i];
+  }
 
   /// How wide disc [i] looks at [now]: 1 face-on, 0 edge-on mid-turn.
   double widthAt(int i, double now) => math.cos(angleAt(i, now)).abs();
 
   /// Whether disc [i] is moving (or about to) at [now].
   bool movingAt(int i, double now) =>
-      now - _flipAt[i] < flipSeconds * timeScale;
+      now - _flipAt[i] < flipSeconds * timeScale * (_rev[i] == 1 ? 2 : 1);
 
   /// Whether any disc is still turning or waiting to turn at [now].
   bool busyAt(double now) {

@@ -419,6 +419,52 @@ class _SceneEditorState extends State<SceneEditor> {
           ),
         ),
       ],
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: Text(context.tr('Replay entrance', '다시 나타나기')),
+        subtitle: Text(
+          context.tr(
+            'After a set time, the same screen comes in again with this scene\'s effect',
+            '정해진 시간이 지나면 같은 화면이 이 장면의 효과로 다시 지나가며 나타납니다',
+          ),
+        ),
+        value: s.replay,
+        onChanged: (v) => _update((s) => s.copyWith(replay: v)),
+      ),
+      if (s.replay) ...[
+        FieldLabel(context.tr('Replay after', '다시 나타나는 시간')),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final seconds in const [5.0, 10.0, 30.0, 60.0, 120.0, 300.0])
+              ChoiceChip(
+                label: Text(
+                  context.tr('${seconds.round()} s', '${seconds.round()}초'),
+                ),
+                selected: s.replaySeconds == seconds,
+                onSelected: (_) =>
+                    _update((s) => s.copyWith(replaySeconds: seconds)),
+              ),
+          ],
+        ),
+        LabeledSlider(
+          label: context.tr('After', '시간'),
+          value: s.replaySeconds,
+          min: Scene.minReplaySeconds,
+          max: Scene.maxReplaySeconds,
+          divisions: (Scene.maxReplaySeconds - Scene.minReplaySeconds).round(),
+          display: (v) => context.tr('${v.round()} s', '${v.round()}초'),
+          onChanged: (v) =>
+              _update((s) => s.copyWith(replaySeconds: v.roundToDouble())),
+        ),
+        Hint(
+          context.tr(
+            'Counted from when the scene has settled. Pick the effect under "How this scene appears" below (Cut shows nothing on LEDs). If the scene leaves sooner than this, it never replays.',
+            '장면이 자리 잡은 뒤부터 셉니다. 아래 "이 장면이 나타나는 효과"에서 고른 효과로 나타납니다 (LED에서 "바로"는 눈에 띄지 않습니다). 장면이 이 시간보다 먼저 넘어가면 다시 나타나지 않습니다.',
+          ),
+        ),
+      ],
     ],
   ];
 
@@ -487,6 +533,16 @@ class _SceneEditorState extends State<SceneEditor> {
             SceneTransition.slideUp,
             Icons.keyboard_double_arrow_up,
             context.tr('Slide up', '위로 밀기'),
+          ),
+          (
+            SceneTransition.slideDiagLeft,
+            Icons.north_west,
+            context.tr('Diagonal ←', '사선 ←'),
+          ),
+          (
+            SceneTransition.slideDiagRight,
+            Icons.north_east,
+            context.tr('Diagonal →', '사선 →'),
           ),
           (SceneTransition.flip, Icons.flip, context.tr('Flip', '플립')),
         ],

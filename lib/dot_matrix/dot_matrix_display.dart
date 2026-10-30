@@ -89,6 +89,12 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
   /// Transition to play on the board's next update after a scene change.
   SceneTransition? _pendingWave;
 
+  /// A scene coming in again on the same board has nothing to flip to, so
+  /// the discs first clear (the old scene leaving) and the content comes
+  /// back once this time has passed (the scene arriving).
+  double _blankUntil = 0;
+  bool _returnPending = false;
+
   bool get _showingCurrent =>
       _shown.id == widget.scene.id && _shownEntry == widget.entry;
 
@@ -192,6 +198,12 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
         _passes = 0;
         _shownAt = _seconds;
         _pendingWave = s.transition;
+        if (s.id == _shown.id && widget.panel.flipDots) {
+          // Same scene again (a replay): clear the board, then redraw it.
+          final sweep = widget.panel.transitionMs / 1000 * 1.2;
+          _blankUntil = _seconds + sweep + FlipBoard.flipSeconds + 0.35;
+          _returnPending = true;
+        }
       }
       _shown = s;
       _shownEntry = entry;
@@ -262,11 +274,19 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
     final target = Uint8List(cols * rows);
     final still = look.direction == MarqueeDirection.none;
     final since = _seconds - _shownAt;
-    for (var c = 0; c < cols; c++) {
-      final flipped = still && look.flippedAt(since, c, cols);
-      for (var r = 0; r < rows; r++) {
-        final on = lit && bitmap.isOn(c + shift, r);
-        if (on != flipped) target[r * cols + c] = 1;
+    final blank = _seconds < _blankUntil;
+    if (!blank && _returnPending) {
+      // The cleared board draws the scene again, in the scene's pattern.
+      _returnPending = false;
+      _pendingWave = look.transition;
+    }
+    if (!blank) {
+      for (var c = 0; c < cols; c++) {
+        final flipped = still && look.flippedAt(since, c, cols);
+        for (var r = 0; r < rows; r++) {
+          final on = lit && bitmap.isOn(c + shift, r);
+          if (on != flipped) target[r * cols + c] = 1;
+        }
       }
     }
 
@@ -287,6 +307,17 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
               (rows - 1 - r) / math.max(1, rows - 1) * span * 0.7,
             SceneTransition.slideLeft ||
             SceneTransition.flip => c / math.max(1, cols - 1) * span,
+            // Across and slightly down, matching the slide's slant.
+            SceneTransition.slideDiagLeft =>
+              (c / math.max(1, cols - 1) * (1 - diagonalSlideRise) +
+                      r / math.max(1, rows - 1) * diagonalSlideRise) *
+                  span,
+            SceneTransition.slideDiagRight =>
+              ((cols - 1 - c) /
+                          math.max(1, cols - 1) *
+                          (1 - diagonalSlideRise) +
+                      r / math.max(1, rows - 1) * diagonalSlideRise) *
+                  span,
           };
     }
 
@@ -313,6 +344,7 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
       rows,
       _seconds,
       delayOf: delayOf,
+      spinUnchanged: wave != null && widget.panel.flipUnchanged,
       onFlip: sound
           ? (delay) {
               final b = (delay / 0.01).floor();
