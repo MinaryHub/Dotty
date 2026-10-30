@@ -68,6 +68,9 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
   double _seconds = 0;
   int _passes = 0;
 
+  /// [_seconds] when the shown scene came up.
+  double _shownAt = 0;
+
   /// The scene whose content [_bitmap] holds. It lags [DotMatrixDisplay.scene]
   /// while a newly given scene is being rasterized, so the board keeps
   /// showing the old one instead of going blank.
@@ -124,7 +127,8 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
         s.kind != o.kind ||
         widget.panel.rows != old.panel.rows ||
         switch (s.kind) {
-          SceneKind.text => s.text != o.text || s.bold != o.bold,
+          SceneKind.text =>
+            s.text != o.text || s.bold != o.bold || s.textSize != o.textSize,
           SceneKind.clock => s.clockFormat != o.clockFormat || s.bold != o.bold,
           SceneKind.image =>
             s.image != o.image ||
@@ -171,6 +175,7 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
         rows: rows,
         bold: s.bold,
         maxWidth: s.direction == MarqueeDirection.none ? widget.columns : null,
+        size: s.textSize,
       );
     }
     // Drop stale results when the content changed again while rendering.
@@ -185,6 +190,7 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
         // A different scene takes over: start it from the beginning.
         _scroll = 0;
         _passes = 0;
+        _shownAt = _seconds;
         _pendingWave = s.transition;
       }
       _shown = s;
@@ -218,7 +224,11 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
     _seconds += dt;
     if (look.direction != MarqueeDirection.none) _scroll += dt * look.speed;
     if (widget.panel.flipDots) _updateBoard(look);
-    _frame.value = DotFrame(scroll: _scroll, seconds: _seconds);
+    _frame.value = DotFrame(
+      scroll: _scroll,
+      seconds: _seconds,
+      sceneSeconds: _seconds - _shownAt,
+    );
 
     final bitmap = _bitmap;
     final onPass = widget.onPass;
@@ -250,11 +260,13 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
       direction: look.direction,
     );
     final target = Uint8List(cols * rows);
-    if (lit) {
+    final still = look.direction == MarqueeDirection.none;
+    final since = _seconds - _shownAt;
+    for (var c = 0; c < cols; c++) {
+      final flipped = still && look.flippedAt(since, c, cols);
       for (var r = 0; r < rows; r++) {
-        for (var c = 0; c < cols; c++) {
-          if (bitmap.isOn(c + shift, r)) target[r * cols + c] = 1;
-        }
+        final on = lit && bitmap.isOn(c + shift, r);
+        if (on != flipped) target[r * cols + c] = 1;
       }
     }
 

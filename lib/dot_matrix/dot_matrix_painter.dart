@@ -12,13 +12,16 @@ import 'led_sprites.dart';
 
 /// Animation state shared between the ticker and the painter.
 class DotFrame {
-  const DotFrame({this.scroll = 0, this.seconds = 0});
+  const DotFrame({this.scroll = 0, this.seconds = 0, this.sceneSeconds = 0});
 
   /// Scroll position in columns since start.
   final double scroll;
 
   /// Wall-clock seconds since start (drives blink and rainbow).
   final double seconds;
+
+  /// Seconds since the scene came up (drives [Scene.flipAll]).
+  final double sceneSeconds;
 }
 
 /// Number of dot columns that fit [size] for a panel [rows] dots tall.
@@ -176,6 +179,8 @@ class DotMatrixPainter extends CustomPainter {
     );
 
     final slide = f.seconds * 0.25 % 1;
+    final still = scene.direction == MarqueeDirection.none;
+    bool flipped(int c) => still && scene.flippedAt(f.sceneSeconds, c, cols);
 
     final board = this.board;
     if (flip == null &&
@@ -227,7 +232,7 @@ class DotMatrixPainter extends CustomPainter {
         final x = originX + c * pitchX;
         column.clear();
         for (var r = 0; r < rows; r++) {
-          final on = ready && bitmap.isOn(c + shift, r);
+          final on = (ready && bitmap.isOn(c + shift, r)) != flipped(c);
           column.add(0, originY + r * pitchY, on, colorOf(c, r, x, on));
         }
         canvas.save();
@@ -244,7 +249,7 @@ class DotMatrixPainter extends CustomPainter {
       final y = originY + r * pitchY;
       for (var c = 0; c < cols; c++) {
         final x = originX + c * pitchX;
-        final on = ready && bitmap.isOn(c + shift, r);
+        final on = (ready && bitmap.isOn(c + shift, r)) != flipped(c);
         leds.add(x, y, on, colorOf(c, r, x, on));
       }
     }

@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -191,6 +192,9 @@ class Scene {
     this.passes = 1,
     this.transition = SceneTransition.fade,
     this.clockFormat = ClockFormat.hm,
+    this.textSize = 1,
+    this.flipAll = false,
+    this.flipAllSeconds = 6,
   });
 
   final String id;
@@ -222,6 +226,27 @@ class Scene {
   /// Time format of a [SceneKind.clock] scene.
   final ClockFormat clockFormat;
 
+  /// Height of text, as a fraction of the panel (shared by all its lines).
+  final double textSize;
+
+  /// A still scene flips every dot over and back every [flipAllSeconds],
+  /// in a wave across the sign, to catch the eye.
+  final bool flipAll;
+  final double flipAllSeconds;
+
+  /// How long the [flipAll] wave takes to cross the sign, and how long the
+  /// sign stays flipped.
+  static const flipAllSweep = 0.6, flipAllHold = 1.2;
+
+  /// Whether column [c] of [cols] shows flipped (inverted) [seconds] after
+  /// this scene came up, for a still scene with [flipAll] on.
+  bool flippedAt(double seconds, int c, int cols) {
+    if (!flipAll || seconds < flipAllSeconds) return false;
+    final phase = seconds % flipAllSeconds;
+    final start = c / math.max(1, cols - 1) * flipAllSweep;
+    return phase >= start && phase < start + flipAllHold;
+  }
+
   /// Scenes that do not scroll cannot count passes and fall back to seconds.
   bool get usesPasses =>
       durationMode == DurationMode.passes &&
@@ -251,6 +276,9 @@ class Scene {
     int? passes,
     SceneTransition? transition,
     ClockFormat? clockFormat,
+    double? textSize,
+    bool? flipAll,
+    double? flipAllSeconds,
   }) {
     return Scene(
       id: id ?? this.id,
@@ -271,6 +299,9 @@ class Scene {
       passes: passes ?? this.passes,
       transition: transition ?? this.transition,
       clockFormat: clockFormat ?? this.clockFormat,
+      textSize: textSize ?? this.textSize,
+      flipAll: flipAll ?? this.flipAll,
+      flipAllSeconds: flipAllSeconds ?? this.flipAllSeconds,
     );
   }
 
@@ -293,6 +324,9 @@ class Scene {
     'passes': passes,
     'transition': transition.name,
     'clockFormat': clockFormat.name,
+    'textSize': textSize,
+    'flipAll': flipAll,
+    'flipAllSeconds': flipAllSeconds,
   };
 
   factory Scene.fromJson(Map<String, dynamic> json, {String? fallbackId}) {
@@ -344,6 +378,11 @@ class Scene {
         'clockFormat',
         d.clockFormat,
       ),
+      textSize: r.number('textSize', d.textSize).clamp(0.2, 1),
+      flipAll: r.boolean('flipAll', d.flipAll),
+      flipAllSeconds: r
+          .number('flipAllSeconds', d.flipAllSeconds)
+          .clamp(3, 120),
     );
   }
 }
