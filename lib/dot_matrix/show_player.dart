@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
@@ -46,6 +47,34 @@ class _PlayingScene {
   Key get key => ValueKey('${scene.id}#$entry');
 }
 
+/// Nothing lit: just the sign's dot grid.
+final _emptyScene = Scene(
+  id: '__empty',
+  text: '',
+  direction: MarqueeDirection.none,
+);
+
+/// The part of [panel] none of the [covered] rectangles reach.
+class _UncoveredClipper extends CustomClipper<Path> {
+  _UncoveredClipper(this.panel, this.covered);
+
+  final Rect panel;
+  final List<Rect> covered;
+
+  @override
+  Path getClip(Size size) {
+    var path = Path()..addRect(panel);
+    for (final r in covered) {
+      path = Path.combine(PathOperation.difference, path, Path()..addRect(r));
+    }
+    return path;
+  }
+
+  @override
+  bool shouldReclip(_UncoveredClipper old) =>
+      old.panel != panel || !listEquals(old.covered, covered);
+}
+
 class _ShowPlayerState extends State<ShowPlayer>
     with SingleTickerProviderStateMixin {
   late final Ticker _ticker = createTicker(_onTick);
@@ -54,6 +83,10 @@ class _ShowPlayerState extends State<ShowPlayer>
   int _index = 0;
   int _entries = 0;
   double _elapsed = 0;
+
+  /// Seconds the shown scene has stood with no transition running; a still
+  /// scene with [Scene.replay] comes in again when this reaches its period.
+  double _settled = 0;
   _PlayingScene? _outgoing;
   double _transition = 1;
 
@@ -81,6 +114,7 @@ class _ShowPlayerState extends State<ShowPlayer>
       _outgoing = null;
       _transition = 1;
       _elapsed = 0;
+      _settled = 0;
     }
     if (_index >= _scenes.length) _index = 0;
   }
@@ -100,10 +134,23 @@ class _ShowPlayerState extends State<ShowPlayer>
       });
     }
 
-    if (!_advances) return;
-    _elapsed += dt;
-    final scene = _current;
-    if (!scene.usesPasses && _elapsed >= scene.durationSeconds) _advance();
+    if (_outgoing == null) _settled += dt;
+
+    if (_advances) {
+      _elapsed += dt;
+      final scene = _current;
+      if (!scene.usesPasses && _elapsed >= scene.durationSeconds) {
+        _advance();
+        return;
+      }
+    }
+
+    // Edited scenes count too: the solo scene is the one on the sign.
+    final soloIndex = widget.soloSceneId == null
+        ? -1
+        : widget.show.indexOf(widget.soloSceneId!);
+    final shown = soloIndex >= 0 ? _scenes[soloIndex] : _current;
+    if (_outgoing == null && shown.replayDue(_settled)) _replay();
   }
 
   void _onPass(Scene scene, int passes) {
@@ -118,6 +165,7 @@ class _ShowPlayerState extends State<ShowPlayer>
       _index = (_index + 1) % _scenes.length;
       _entries++;
       _elapsed = 0;
+      _settled = 0;
       // A flip-dot board turns its own discs over to the next scene.
       final cut =
           _current.transition == SceneTransition.cut ||
@@ -126,6 +174,29 @@ class _ShowPlayerState extends State<ShowPlayer>
       _transition = cut ? 1 : 0;
     });
     widget.onSceneChanged?.call(_index);
+  }
+
+  /// Brings the same scene in again with its entry effect. The content is
+  /// identical, so on LEDs the old copy leaves as the new one arrives; a
+  /// flip-dot board clears and redraws itself (see [DotMatrixDisplay]).
+  void _replay() {
+    setState(() {
+      final soloIndex = widget.soloSceneId == null
+          ? -1
+          : widget.show.indexOf(widget.soloSceneId!);
+      final scene = soloIndex >= 0 ? _scenes[soloIndex] : _current;
+      // While editing, the solo scene's entry number is -1 - _entries.
+      final previous = _PlayingScene(
+        scene,
+        soloIndex >= 0 ? -1 - _entries : _entries,
+      );
+      _entries++;
+      _settled = 0;
+      final cut =
+          scene.transition == SceneTransition.cut || widget.show.panel.flipDots;
+      _outgoing = cut ? null : previous;
+      _transition = cut ? 1 : 0;
+    });
   }
 
   @override
@@ -154,11 +225,11 @@ class _ShowPlayerState extends State<ShowPlayer>
         ? -1
         : widget.show.indexOf(widget.soloSceneId!);
     final current = soloIndex >= 0
-        ? _PlayingScene(_scenes[soloIndex], -1)
+        ? _PlayingScene(_scenes[soloIndex], -1 - _entries)
         : _PlayingScene(_current, _entries);
     // Keep the outgoing scene's latest settings if it was edited meanwhile.
     final outgoing = _outgoing;
-    final out = outgoing == null || soloIndex >= 0
+    final out = outgoing == null
         ? null
         : _PlayingScene(
             _scenes.firstWhere(
@@ -204,12 +275,34 @@ class _ShowPlayerState extends State<ShowPlayer>
           double snap(double v, double pitch) => (v / pitch).round() * pitch;
 
           var inOffset = Offset.zero, outOffset = Offset.zero;
-          var inOpacity = 1.0;
+          var inOpacity = 1.0, outOpacity = 1.0;
           FlipState? inFlip, outFlip;
+          // The same scene coming in again (a replay): its two copies look
+          // alike, so a fade has to dip out and back in to be seen at all.
+          final replaying = out != null && out.scene.id == current.scene.id;
           switch (current.scene.transition) {
             case SceneTransition.cut:
-            case SceneTransition.fade:
               inOpacity = t;
+            case SceneTransition.fade:
+              if (replaying) {
+                outOpacity = (1 - 2 * t).clamp(0.0, 1.0);
+                inOpacity = (2 * t - 1).clamp(0.0, 1.0);
+              } else {
+                inOpacity = t;
+              }
+            case SceneTransition.slideDiagLeft:
+            case SceneTransition.slideDiagRight:
+              // Sideways like the plain slide, rising slightly: the new
+              // scene arrives from the lower right (or lower left).
+              final sign =
+                  current.scene.transition == SceneTransition.slideDiagLeft
+                  ? 1.0
+                  : -1.0;
+              final rise = size.height * diagonalSlideRise;
+              final dx = snap(size.width * t, pitchX);
+              final dy = snap(rise * t, pitchY);
+              outOffset = Offset(-sign * dx, -dy);
+              inOffset = Offset(sign * (size.width - dx), rise - dy);
             case SceneTransition.slideLeft:
               final dx = snap(size.width * t, pitchX);
               outOffset = Offset(-dx, 0);
@@ -246,13 +339,50 @@ class _ShowPlayerState extends State<ShowPlayer>
             );
           }
 
+          // A diagonal slide leaves a band of the sign uncovered above the
+          // incoming scene and below the outgoing one; an empty scene fills
+          // it so the dot grid carries on there.
+          final diagonalLeft =
+              current.scene.transition == SceneTransition.slideDiagLeft;
+          final diagonal =
+              out != null &&
+              (diagonalLeft ||
+                  current.scene.transition == SceneTransition.slideDiagRight);
+          // The two scenes meet at this x; the band beside each takes that
+          // scene's dot color (the unlit dots are tinted by it).
+          final meet = diagonalLeft ? inOffset.dx : outOffset.dx;
+          Widget gridBand(Rect part, Scene beside, String name) => ClipPath(
+            key: ValueKey('uncovered-grid-$name'),
+            clipper: _UncoveredClipper(part, [
+              outOffset & size,
+              inOffset & size,
+            ]),
+            child: _display(
+              _PlayingScene(_emptyScene.copyWith(dotColor: beside.dotColor), 0),
+              null,
+              columns,
+            ),
+          );
+
           return Stack(
             fit: StackFit.expand,
             children: [
               // Flipping scenes only paint their dots; they share this
               // background.
               ColoredBox(color: widget.show.panel.backgroundColor),
-              if (out != null) layer(out, outOffset, 1, outFlip),
+              if (diagonal) ...[
+                gridBand(
+                  Rect.fromLTRB(0, 0, meet, size.height),
+                  diagonalLeft ? out.scene : current.scene,
+                  'left',
+                ),
+                gridBand(
+                  Rect.fromLTRB(meet, 0, size.width, size.height),
+                  diagonalLeft ? current.scene : out.scene,
+                  'right',
+                ),
+              ],
+              if (out != null) layer(out, outOffset, outOpacity, outFlip),
               layer(current, inOffset, inOpacity, inFlip),
             ],
           );

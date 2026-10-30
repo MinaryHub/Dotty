@@ -57,6 +57,23 @@ class PanelEditor extends StatelessWidget {
                 ),
                 onChanged: (v) => update((p) => p.copyWith(flipSeconds: v)),
               ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  context.tr('Flip every dot in transitions', '전환할 때 모든 점 뒤집기'),
+                ),
+                subtitle: Text(
+                  context.tr(
+                    'Dots that stay the same also turn over and back in the wave. Off: only the dots that change flip.',
+                    '바뀌지 않는 점도 물결에 맞춰 뒤집혔다가 돌아옵니다. 끄면 바뀌는 점만 뒤집힙니다.',
+                  ),
+                ),
+                value: p.flipUnchanged,
+                onChanged: (v) {
+                  FlipSound.instance.unlock();
+                  update((p) => p.copyWith(flipUnchanged: v));
+                },
+              ),
               Hint(
                 context.tr(
                   'How long one disc takes to flip and settle. Best seen when a still scene changes. For fast scrolling or blinking it is shortened automatically so text stays readable; lower the scroll speed (e.g. 5 dots/s) to watch the discs turn. How long the wave takes to cross the sign on a scene change is set by "Transition time" below.',

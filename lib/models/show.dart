@@ -47,7 +47,22 @@ enum ImageColorMode { original, mono }
 enum DurationMode { seconds, passes }
 
 /// How a scene enters the display.
-enum SceneTransition { cut, fade, slideLeft, slideUp, flip }
+///
+/// [slideDiagLeft] and [slideDiagRight] flow sideways at a slight upward
+/// angle: the new scene comes in from the lower right (or lower left).
+enum SceneTransition {
+  cut,
+  fade,
+  slideLeft,
+  slideUp,
+  slideDiagLeft,
+  slideDiagRight,
+  flip,
+}
+
+/// How far the diagonal slides rise, as a fraction of the panel height per
+/// full panel width travelled.
+const diagonalSlideRise = 0.3;
 
 /// Settings of the physical sign, shared by every scene.
 @immutable
@@ -65,6 +80,7 @@ class PanelSettings {
     this.soundVolume = 0.6,
     this.aspectRatio = 0,
     this.flipSeconds = 0.5,
+    this.flipUnchanged = false,
   });
 
   /// Vertical resolution in dots.
@@ -95,6 +111,11 @@ class PanelSettings {
   /// How long one flip-dot disc takes to turn over and settle.
   final double flipSeconds;
 
+  /// On a flip-dot board, whether discs that keep their face also turn over
+  /// (and back) when the sign animates a scene change, so the whole board
+  /// takes part in the wave instead of only the discs that have to change.
+  final bool flipUnchanged;
+
   static const minRows = 8;
   static const maxRows = 64;
 
@@ -111,6 +132,7 @@ class PanelSettings {
     double? soundVolume,
     double? aspectRatio,
     double? flipSeconds,
+    bool? flipUnchanged,
   }) {
     return PanelSettings(
       rows: rows ?? this.rows,
@@ -125,6 +147,7 @@ class PanelSettings {
       soundVolume: soundVolume ?? this.soundVolume,
       aspectRatio: aspectRatio ?? this.aspectRatio,
       flipSeconds: flipSeconds ?? this.flipSeconds,
+      flipUnchanged: flipUnchanged ?? this.flipUnchanged,
     );
   }
 
@@ -141,6 +164,7 @@ class PanelSettings {
     'soundVolume': soundVolume,
     'aspectRatio': aspectRatio,
     'flipSeconds': flipSeconds,
+    'flipUnchanged': flipUnchanged,
   };
 
   factory PanelSettings.fromJson(Map<String, dynamic> json) {
@@ -160,6 +184,7 @@ class PanelSettings {
       aspectRatio: r.number('aspectRatio', d.aspectRatio).clamp(0, 8),
       flipSeconds: _migrateFlipSeconds(r.number('flipSeconds', d.flipSeconds))
           .clamp(0.08, 1.5),
+      flipUnchanged: r.boolean('flipUnchanged', d.flipUnchanged),
     );
   }
 }
@@ -195,6 +220,8 @@ class Scene {
     this.textSize = 1,
     this.flipAll = false,
     this.flipAllSeconds = 6,
+    this.replay = false,
+    this.replaySeconds = 10,
   });
 
   final String id;
@@ -234,8 +261,25 @@ class Scene {
   final bool flipAll;
   final double flipAllSeconds;
 
+  /// A still scene comes in again every [replaySeconds] with its own entry
+  /// effect ([transition]), the same screen passing by once more, to catch
+  /// the eye. The time counts from when the scene has settled.
+  final bool replay;
+  final double replaySeconds;
+
+  /// Shortest and longest [replaySeconds].
+  static const minReplaySeconds = 2.0, maxReplaySeconds = 300.0;
+
   /// Shortest and longest [flipAllSeconds].
   static const minFlipAllSeconds = 1.0, maxFlipAllSeconds = 60.0;
+
+  /// Whether the content stands still on the sign (no scrolling).
+  bool get isStill => direction == MarqueeDirection.none || speed <= 0;
+
+  /// Whether this scene should come in again after standing for [settled]
+  /// seconds.
+  bool replayDue(double settled) =>
+      replay && isStill && settled >= replaySeconds;
 
   /// How long the [flipAll] wave takes to cross the sign, and how long the
   /// sign stays flipped; both shrink for short periods so the sign is back
@@ -284,6 +328,8 @@ class Scene {
     double? textSize,
     bool? flipAll,
     double? flipAllSeconds,
+    bool? replay,
+    double? replaySeconds,
   }) {
     return Scene(
       id: id ?? this.id,
@@ -307,6 +353,8 @@ class Scene {
       textSize: textSize ?? this.textSize,
       flipAll: flipAll ?? this.flipAll,
       flipAllSeconds: flipAllSeconds ?? this.flipAllSeconds,
+      replay: replay ?? this.replay,
+      replaySeconds: replaySeconds ?? this.replaySeconds,
     );
   }
 
@@ -332,6 +380,8 @@ class Scene {
     'textSize': textSize,
     'flipAll': flipAll,
     'flipAllSeconds': flipAllSeconds,
+    'replay': replay,
+    'replaySeconds': replaySeconds,
   };
 
   factory Scene.fromJson(Map<String, dynamic> json, {String? fallbackId}) {
@@ -388,6 +438,10 @@ class Scene {
       flipAllSeconds: r
           .number('flipAllSeconds', d.flipAllSeconds)
           .clamp(minFlipAllSeconds, maxFlipAllSeconds),
+      replay: r.boolean('replay', d.replay),
+      replaySeconds: r
+          .number('replaySeconds', d.replaySeconds)
+          .clamp(minReplaySeconds, maxReplaySeconds),
     );
   }
 }

@@ -101,6 +101,157 @@ void main() {
     expect(changes, [1, 0]);
   });
 
+  testWidgets('diagonal slides rise sideways, from either side', (
+    tester,
+  ) async {
+    Future<(Offset, Offset)> midTransition(SceneTransition transition) async {
+      final show = Show(
+        panel: const PanelSettings(transitionMs: 1000),
+        scenes: [
+          for (final id in ['a', 'b'])
+            Scene(
+              id: id,
+              text: id,
+              direction: MarqueeDirection.none,
+              durationMode: DurationMode.seconds,
+              durationSeconds: 1,
+              transition: transition,
+            ),
+        ],
+      );
+      await tester.pumpWidget(MaterialApp(home: ShowPlayer(show: show)));
+      await tester.pump(const Duration(milliseconds: 1100));
+      await tester.pump(const Duration(milliseconds: 500));
+      // The two scenes (an empty grid fills the uncovered band behind them).
+      final displays = find.byWidgetPredicate(
+        (w) => w is DotMatrixDisplay && w.scene.id != '__empty',
+      );
+      expect(displays, findsNWidgets(2));
+      expect(
+        find.byKey(const ValueKey('uncovered-grid-left')),
+        findsOneWidget,
+        reason: 'the dot grid carries on where neither scene reaches',
+      );
+      expect(find.byKey(const ValueKey('uncovered-grid-right')), findsOne);
+      final origin = tester.getTopLeft(find.byType(ShowPlayer));
+      return (
+        tester.getTopLeft(displays.first) - origin,
+        tester.getTopLeft(displays.last) - origin,
+      );
+    }
+
+    var (out, incoming) = await midTransition(SceneTransition.slideDiagLeft);
+    expect(out.dx, lessThan(0), reason: 'old scene leaves to the left');
+    expect(out.dy, lessThan(0), reason: '…and a little upward');
+    expect(incoming.dx, greaterThan(0), reason: 'new one comes from the right');
+    expect(incoming.dy, greaterThan(0), reason: '…from below');
+    expect(incoming.dy.abs(), lessThan(incoming.dx.abs()), reason: 'slight');
+
+    await tester.pumpWidget(const SizedBox());
+    (out, incoming) = await midTransition(SceneTransition.slideDiagRight);
+    expect(out.dx, greaterThan(0));
+    expect(out.dy, lessThan(0));
+    expect(incoming.dx, lessThan(0));
+    expect(incoming.dy, greaterThan(0));
+  });
+
+  testWidgets('a still scene comes in again after its replay time', (
+    tester,
+  ) async {
+    Show showWith({required bool replay}) => Show(
+      panel: const PanelSettings(transitionMs: 200),
+      scenes: [
+        Scene(
+          id: 'a',
+          text: 'a',
+          direction: MarqueeDirection.none,
+          replay: replay,
+          replaySeconds: 3,
+          transition: SceneTransition.slideDiagLeft,
+        ),
+      ],
+    );
+    final entries = <int>[];
+    Future<void> run(int ms) async {
+      for (var t = 0; t < ms; t += 50) {
+        await tester.pump(const Duration(milliseconds: 50));
+        for (final d in tester.widgetList<DotMatrixDisplay>(
+          find.byType(DotMatrixDisplay),
+        )) {
+          if (!entries.contains(d.entry)) entries.add(d.entry);
+        }
+      }
+    }
+
+    // Off: the single still scene just stays.
+    await tester.pumpWidget(
+      MaterialApp(home: ShowPlayer(show: showWith(replay: false))),
+    );
+    await run(7000);
+    expect(entries, [0]);
+    expect(find.byType(DotMatrixDisplay), findsOneWidget);
+
+    // On: nothing before the time, then the old copy leaves as a new one
+    // enters (two displays of the same scene, plus the grid filling the
+    // band a diagonal slide leaves), then one again.
+    await tester.pumpWidget(const SizedBox());
+    entries.clear();
+    await tester.pumpWidget(
+      MaterialApp(home: ShowPlayer(show: showWith(replay: true))),
+    );
+    await run(2800);
+    expect(entries, [0]);
+    expect(find.byType(DotMatrixDisplay), findsOneWidget);
+    await run(400);
+    final during = tester
+        .widgetList<DotMatrixDisplay>(find.byType(DotMatrixDisplay))
+        .where((d) => d.scene.id != '__empty')
+        .toList();
+    expect(during, hasLength(2));
+    expect(during.map((d) => d.scene.id).toSet(), {'a'});
+    expect(during.map((d) => d.entry).toSet(), {0, 1});
+    await run(600);
+    expect(find.byType(DotMatrixDisplay), findsOneWidget);
+    expect(
+      tester.widget<DotMatrixDisplay>(find.byType(DotMatrixDisplay)).entry,
+      1,
+    );
+    // The time counts again from when the new copy has settled (≈3.2 s),
+    // so the next replay is due at ≈6.2 s.
+    await run(2200);
+    expect(entries, [0, 1]);
+    await run(800);
+    expect(entries, [0, 1, 2]);
+  });
+
+  testWidgets('editing one scene previews its replay too', (tester) async {
+    final show = Show(
+      panel: const PanelSettings(transitionMs: 200),
+      scenes: [
+        for (final id in ['a', 'b'])
+          Scene(
+            id: id,
+            text: id,
+            direction: MarqueeDirection.none,
+            replay: id == 'b',
+            replaySeconds: 2,
+            transition: SceneTransition.fade,
+          ),
+      ],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ShowPlayer(show: show, soloSceneId: 'b'),
+      ),
+    );
+    var sawTwo = false;
+    for (var t = 0; t < 3000; t += 50) {
+      await tester.pump(const Duration(milliseconds: 50));
+      sawTwo |= find.byType(DotMatrixDisplay).evaluate().length == 2;
+    }
+    expect(sawTwo, isTrue);
+  });
+
   testWidgets('flip transition shows both scenes, then only the new one', (
     tester,
   ) async {
@@ -186,6 +337,114 @@ void main() {
       reason: 'same board, not remounted',
     );
     expect(tester.widget<DotMatrixDisplay>(board).scene.id, 'b');
+  });
+
+  testWidgets('a flip-dot board clears and redraws a replayed scene', (
+    tester,
+  ) async {
+    final show = Show(
+      panel: const PanelSettings(flipDots: true, transitionMs: 100),
+      scenes: [
+        Scene(
+          id: 'a',
+          text: 'A',
+          direction: MarqueeDirection.none,
+          replay: true,
+          replaySeconds: 2,
+        ),
+      ],
+    );
+    await tester.pumpWidget(MaterialApp(home: ShowPlayer(show: show)));
+
+    // The discs' faces once they have all finished turning.
+    int litDiscs() {
+      final painter =
+          tester
+                  .widget<CustomPaint>(
+                    find.descendant(
+                      of: find.byType(DotMatrixDisplay),
+                      matching: find.byType(CustomPaint),
+                    ),
+                  )
+                  .painter!
+              as DotMatrixPainter;
+      final board = painter.board!;
+      return [
+        for (var i = 0; i < board.cols * board.rows; i++) board.faceAt(i, 1e9),
+      ].fold(0, (a, b) => a + b);
+    }
+
+    Future<void> run(int ms) async {
+      for (var t = 0; t < ms; t += 50) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 5)),
+        );
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+    }
+
+    await run(1000);
+    final lit = litDiscs();
+    expect(lit, greaterThan(0));
+    await run(900); // t = 1.9 s
+    expect(litDiscs(), lit, reason: 'not yet');
+    await run(400); // replay due at 2 s: the board clears…
+    expect(litDiscs(), 0);
+    await run(1000); // …and draws the scene again.
+    expect(litDiscs(), lit);
+  });
+
+  testWidgets('flip-dot transitions turn unchanged discs only if asked', (
+    tester,
+  ) async {
+    Future<bool> turnsDuringChange({required bool flipUnchanged}) async {
+      final show = Show(
+        panel: PanelSettings(
+          flipDots: true,
+          transitionMs: 400,
+          flipUnchanged: flipUnchanged,
+        ),
+        scenes: [
+          // Identical content: nothing needs to flip on the change.
+          for (final id in ['a', 'b'])
+            Scene(
+              id: id,
+              text: 'A',
+              direction: MarqueeDirection.none,
+              durationMode: DurationMode.seconds,
+              durationSeconds: 1,
+              transition: SceneTransition.slideLeft,
+            ),
+        ],
+      );
+      await tester.pumpWidget(MaterialApp(home: ShowPlayer(show: show)));
+      var busy = false;
+      for (var t = 0; t < 2200; t += 50) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 5)),
+        );
+        await tester.pump(const Duration(milliseconds: 50));
+        final painter =
+            tester
+                    .widget<CustomPaint>(
+                      find.descendant(
+                        of: find.byType(DotMatrixDisplay),
+                        matching: find.byType(CustomPaint),
+                      ),
+                    )
+                    .painter!
+                as DotMatrixPainter;
+        // Skip the first second: the scene has not changed yet.
+        if (t > 1100 && painter.board!.busyAt(painter.frame.value.seconds)) {
+          busy = true;
+        }
+      }
+      await tester.pumpWidget(const SizedBox());
+      return busy;
+    }
+
+    expect(await turnsDuringChange(flipUnchanged: false), isFalse);
+    expect(await turnsDuringChange(flipUnchanged: true), isTrue);
   });
 
   testWidgets('preview and fullscreen show the same dot grid and shape', (

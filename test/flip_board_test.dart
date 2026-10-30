@@ -36,6 +36,53 @@ void main() {
     expect(board.busyAt(1.2 + flip + 1e-6), isFalse);
   });
 
+  test('with spinUnchanged, discs that keep their face turn over and back', () {
+    final board = FlipBoard();
+    board.update(Uint8List.fromList([0, 1]), 2, 1, 0, delayOf: (_, _) => 0);
+
+    final flips = <double>[];
+    board.update(
+      Uint8List.fromList([0, 1]),
+      2,
+      1,
+      1,
+      delayOf: (c, _) => c * 0.5,
+      onFlip: flips.add,
+      spinUnchanged: true,
+    );
+    // Two clicks per disc: the turn over, then the turn back.
+    expect(flips, [0.0, flip, 0.5, 0.5 + flip]);
+
+    // Disc 0 (dark): lit face while over, dark again afterwards.
+    expect(board.faceAt(0, 1), 0);
+    expect(board.faceAt(0, 1 + flip * 0.75), 1, reason: 'over past edge-on');
+    expect(board.faceAt(0, 1 + flip * 1.0), 1, reason: 'rests on the far face');
+    expect(board.faceAt(0, 1 + flip * 1.75), 0, reason: 'back past edge-on');
+    expect(board.faceAt(0, 1 + flip * 2), 0);
+    expect(board.widthAt(0, 1 + flip * 1.0 + 1e-3), lessThan(1));
+    // Disc 1 (lit) does the same the other way round, on its own schedule.
+    expect(board.faceAt(1, 1.5 + flip * 0.75), 0);
+    expect(board.faceAt(1, 1.5 + flip * 1.75), 1);
+    expect(board.busyAt(1 + flip * 2 - 1e-3), isTrue);
+    expect(board.busyAt(1.5 + flip * 2 + 1e-3), isFalse);
+  });
+
+  test('without spinUnchanged nothing moves when the content is the same', () {
+    final board = FlipBoard();
+    board.update(Uint8List.fromList([0, 1]), 2, 1, 0, delayOf: (_, _) => 0);
+    var flips = 0;
+    board.update(
+      Uint8List.fromList([0, 1]),
+      2,
+      1,
+      1,
+      delayOf: (_, _) => 0,
+      onFlip: (_) => flips++,
+    );
+    expect(flips, 0);
+    expect(board.busyAt(1), isFalse);
+  });
+
   test('a disc reversed mid-turn turns back from the face it shows', () {
     final board = FlipBoard();
     board.update(Uint8List.fromList([0]), 1, 1, 0, delayOf: (_, _) => 0);

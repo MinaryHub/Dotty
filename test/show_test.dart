@@ -5,11 +5,16 @@ import 'package:dotty/models/show.dart';
 import 'package:dotty/models/show_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   test('show survives an encode/decode round trip, images included', () {
     final show = Show(
-      panel: const PanelSettings(rows: 32, shape: DotShape.square),
+      panel: const PanelSettings(
+        rows: 32,
+        shape: DotShape.square,
+        flipUnchanged: true,
+      ),
       scenes: [
         Scene(
           id: 'a',
@@ -19,6 +24,9 @@ void main() {
           textSize: 0.6,
           flipAll: true,
           flipAllSeconds: 9,
+          replay: true,
+          replaySeconds: 45,
+          transition: SceneTransition.slideDiagRight,
         ),
         Scene(
           id: 'b',
@@ -34,6 +42,58 @@ void main() {
     final decoded = Show.decode(show.encode());
     expect(jsonEncode(decoded.toJson()), jsonEncode(show.toJson()));
     expect(decoded.scenes[1].image, [1, 2, 3, 250]);
+    expect(decoded.panel.flipUnchanged, isTrue);
+    expect(decoded.scenes[0].transition, SceneTransition.slideDiagRight);
+    expect(decoded.scenes[0].replaySeconds, 45);
+  });
+
+  test('saves from before the new options keep working, options off', () {
+    final show = Show.decode(
+      '{"panel": {"rows": 20}, "scenes": [{"id": "x", "transition": "slideUp"}]}',
+    );
+    expect(show.panel.flipUnchanged, isFalse);
+    expect(show.scenes.single.replay, isFalse);
+    expect(show.scenes.single.replaySeconds, 10);
+    // An unknown transition name (a save from a newer version) falls back.
+    final odd = Show.decode('{"scenes": [{"id": "y", "transition": "warp"}]}');
+    expect(odd.scenes.single.transition, SceneTransition.fade);
+  });
+
+  test('replay is due only for a still scene, after its period settled', () {
+    const s = Scene(
+      id: 'a',
+      direction: MarqueeDirection.none,
+      replay: true,
+      replaySeconds: 10,
+    );
+    expect(s.replayDue(9.9), isFalse);
+    expect(s.replayDue(10), isTrue);
+    expect(s.copyWith(replay: false).replayDue(60), isFalse);
+    // Scrolling text is not still; speed 0 is.
+    final scrolling = s.copyWith(direction: MarqueeDirection.left, speed: 20);
+    expect(scrolling.replayDue(60), isFalse);
+    expect(scrolling.copyWith(speed: 0).replayDue(60), isTrue);
+    // Out-of-range periods from a damaged save are clamped.
+    expect(Scene.fromJson({'replaySeconds': 0.1}).replaySeconds, 2);
+    expect(Scene.fromJson({'replaySeconds': 99999}).replaySeconds, 300);
+  });
+
+  test('scenes a user adds are kept on this device and come back', () async {
+    SharedPreferences.setMockInitialValues({});
+    final store = await ShowStore.load();
+    final added = Scene(id: 'mine', text: 'My own sign', replay: true);
+    store.addScene(added);
+    store.dispose(); // flushes the pending write
+
+    // A fresh start reads them back from the device's own storage.
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('show_v2'), contains('My own sign'));
+    final reopened = await ShowStore.load();
+    final back = reopened.value.scenes.last;
+    expect(back.id, 'mine');
+    expect(back.text, 'My own sign');
+    expect(back.replay, isTrue);
+    reopened.dispose();
   });
 
   test('corrupt or partial saves fall back to defaults', () {
