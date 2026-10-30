@@ -64,38 +64,98 @@ class DotBitmap {
 /// Glyph metrics differ widely between fonts, so the text is measured by its
 /// actual ink: vertically centered on what is drawn, and shrunk if it would
 /// not fit.
+///
+/// Lines (split at newlines) are stacked one dot apart, each centered; all
+/// of them together are at most [size] of the panel's height.
 Future<DotBitmap> rasterizeText(
   String text, {
   required int rows,
   bool bold = true,
   int? maxWidth,
+  double size = 1,
 }) async {
-  if (text.trim().isEmpty) return DotBitmap.empty(rows);
+  // Blank lines around the text would only make it smaller.
+  final lines = text.replaceAll('\r', '').trim().split('\n');
+  if (lines.every((l) => l.trim().isEmpty)) return DotBitmap.empty(rows);
 
-  var fontSize = rows * 0.9;
-  var r = await _render(text, fontSize, bold);
-  for (var attempt = 0; attempt < 3 && r.inkHeight > rows; attempt++) {
-    fontSize *= rows / r.inkHeight;
-    r = await _render(text, fontSize, bold);
+  final target = math.max(1, (rows * size.clamp(0.0, 1.0)).round());
+  var fontSize = target * 0.9 / lines.length;
+  var r = await _Lines.render(lines, fontSize, bold);
+  for (var attempt = 0; attempt < 3 && r.height > target; attempt++) {
+    fontSize *= target / r.height;
+    r = await _Lines.render(lines, fontSize, bold);
+  }
+  // Integer gaps can keep it a dot too tall; step down until it fits.
+  for (var attempt = 0; attempt < 4 && r.height > target; attempt++) {
+    fontSize *= 0.94;
+    r = await _Lines.render(lines, fontSize, bold);
   }
   // Text that doesn't move is shrunk to fit the panel's width, so it all
   // shows, centered and still.
   if (maxWidth != null && r.width > maxWidth) {
     for (var attempt = 0; attempt < 4 && r.width > maxWidth; attempt++) {
       fontSize *= maxWidth / r.width * 0.98;
-      r = await _render(text, fontSize, bold);
+      r = await _Lines.render(lines, fontSize, bold);
     }
   }
-  if (r.inkHeight == 0) return DotBitmap.empty(rows);
+  if (r.height == 0) return DotBitmap.empty(rows);
 
-  final top = r.inkTop - ((rows - r.inkHeight) / 2).floor();
+  final top = (rows - r.height) ~/ 2;
   final bits = Uint8List(r.width * rows);
-  for (var y = 0; y < rows; y++) {
-    final sy = top + y;
-    if (sy < 0 || sy >= r.height) continue;
-    bits.setRange(y * r.width, (y + 1) * r.width, r.bits, sy * r.width);
+  for (var y = 0; y < r.height; y++) {
+    final ty = top + y;
+    if (ty < 0 || ty >= rows) continue;
+    bits.setRange(ty * r.width, (ty + 1) * r.width, r.bits, y * r.width);
   }
   return DotBitmap(r.width, rows, bits);
+}
+
+/// Lines of text stacked into one block of ink.
+class _Lines {
+  _Lines(this.width, this.height, this.bits);
+
+  final int width;
+  final int height;
+  final Uint8List bits;
+
+  static Future<_Lines> render(
+    List<String> lines,
+    double fontSize,
+    bool bold,
+  ) async {
+    final rendered = [for (final l in lines) await _render(l, fontSize, bold)];
+    // Every line keeps the same band (the ink of all lines together), so
+    // their baselines line up and a line of dashes stays where it belongs.
+    var inkTop = 1 << 30, inkBottom = -1;
+    for (final r in rendered) {
+      if (r.inkHeight == 0) continue;
+      inkTop = math.min(inkTop, r.inkTop);
+      inkBottom = math.max(inkBottom, r.inkBottom);
+    }
+    if (inkBottom < 0) return _Lines(0, 0, Uint8List(0));
+    final band = inkBottom - inkTop + 1;
+    const gap = 1;
+    final width = rendered.map((r) => r.width).reduce(math.max);
+    final height = band * lines.length + gap * (lines.length - 1);
+    final bits = Uint8List(width * height);
+    for (var i = 0; i < rendered.length; i++) {
+      final r = rendered[i];
+      final left = (width - r.width) ~/ 2;
+      final top = i * (band + gap);
+      for (var y = 0; y < band; y++) {
+        final sy = inkTop + y;
+        if (sy >= r.height) break;
+        final from = sy * r.width;
+        bits.setRange(
+          (top + y) * width + left,
+          (top + y) * width + left + r.width,
+          r.bits,
+          from,
+        );
+      }
+    }
+    return _Lines(width, height, bits);
+  }
 }
 
 class _Rendered {

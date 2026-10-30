@@ -143,4 +143,39 @@ void main() {
       expect(small.litCount, greaterThan(0));
     });
   });
+
+  testWidgets('text can span several lines and be made smaller', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      int inkRows(DotBitmap b) => [
+        for (var y = 0; y < b.rows; y++)
+          if ([for (var x = 0; x < b.width; x++) b.isOn(x, y)].any((o) => o)) y,
+      ].length;
+      int bands(DotBitmap b) {
+        var count = 0;
+        var inside = false;
+        for (var y = 0; y < b.rows; y++) {
+          final ink = [for (var x = 0; x < b.width; x++) b.isOn(x, y)]
+              .any((o) => o);
+          if (ink && !inside) count++;
+          inside = ink;
+        }
+        return count;
+      }
+
+      final one = await rasterizeText('HI', rows: 32);
+      final two = await rasterizeText('HI\nHO', rows: 32);
+      expect(bands(one), 1);
+      expect(bands(two), 2);
+      expect(inkRows(two), lessThanOrEqualTo(32));
+      // A trailing newline adds no empty line.
+      final trailing = await rasterizeText('HI\n', rows: 32);
+      expect(trailing.toString(), one.toString());
+
+      final half = await rasterizeText('HI', rows: 32, size: 0.5);
+      expect(inkRows(half), lessThanOrEqualTo(16));
+      expect(half.width, lessThan(one.width));
+    });
+  });
 }

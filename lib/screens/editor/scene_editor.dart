@@ -137,7 +137,10 @@ class _SceneEditorState extends State<SceneEditor> {
     TextField(
       controller: _text,
       decoration: InputDecoration(
-        hintText: context.tr('Type the text to show', '표시할 문구를 입력하세요'),
+        hintText: context.tr(
+          'Type the text to show (Enter for a new line)',
+          '표시할 문구를 입력하세요 (Enter로 줄바꿈)',
+        ),
         border: const OutlineInputBorder(),
         suffixIcon: IconButton(
           icon: const Icon(Icons.clear),
@@ -145,6 +148,9 @@ class _SceneEditorState extends State<SceneEditor> {
           onPressed: () => _setText(''),
         ),
       ),
+      keyboardType: TextInputType.multiline,
+      minLines: 1,
+      maxLines: 4,
       onChanged: (v) => _update((s) => s.copyWith(text: v)),
     ),
     const SizedBox(height: 8),
@@ -161,6 +167,23 @@ class _SceneEditorState extends State<SceneEditor> {
       title: Text(context.tr('Bold', '굵은 글씨')),
       value: s.bold,
       onChanged: (v) => _update((s) => s.copyWith(bold: v)),
+    ),
+    LabeledSlider(
+      label: context.tr('Text size', '글자 크기'),
+      value: s.textSize,
+      min: 0.2,
+      max: 1,
+      divisions: 16,
+      display: (v) => '${(v * 100).round()}%',
+      onChanged: (v) => _update((s) => s.copyWith(textSize: v)),
+    ),
+    Hint(
+      context.tr(
+        'Share of the panel height the text uses, all lines together. '
+            'Several lines share the height, so each gets smaller.',
+        '패널 높이 중 글자가 차지하는 비율입니다 (모든 줄 합계). 여러 줄이면 '
+            '높이를 나눠 쓰므로 줄마다 작아집니다.',
+      ),
     ),
   ];
 
@@ -346,6 +369,32 @@ class _SceneEditorState extends State<SceneEditor> {
       display: (v) => '${v.toStringAsFixed(1)} Hz',
       onChanged: s.blink ? (v) => _update((s) => s.copyWith(blinkHz: v)) : null,
     ),
+    if (s.direction == MarqueeDirection.none || s.speed <= 0) ...[
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: Text(context.tr('Flip all', '전체 플립')),
+        subtitle: Text(
+          context.tr(
+            'Every dot flips over and back in a wave, now and then',
+            '일정 간격으로 모든 점이 물결처럼 뒤집혔다가 돌아옵니다',
+          ),
+        ),
+        value: s.flipAll,
+        onChanged: (v) => _update((s) => s.copyWith(flipAll: v)),
+      ),
+      LabeledSlider(
+        label: context.tr('Flip every', '플립 간격'),
+        value: s.flipAllSeconds,
+        min: 3,
+        max: 30,
+        divisions: 27,
+        display: (v) => context.tr('${v.round()} s', '${v.round()}초'),
+        onChanged: s.flipAll
+            ? (v) =>
+                  _update((s) => s.copyWith(flipAllSeconds: v.roundToDouble()))
+            : null,
+      ),
+    ],
   ];
 
   List<Widget> _timingFields(Scene s, Show show) {

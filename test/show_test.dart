@@ -11,7 +11,15 @@ void main() {
     final show = Show(
       panel: const PanelSettings(rows: 32, shape: DotShape.square),
       scenes: [
-        Scene(id: 'a', text: '테스트', blink: true, passes: 3),
+        Scene(
+          id: 'a',
+          text: '테스트\n둘째 줄',
+          blink: true,
+          passes: 3,
+          textSize: 0.6,
+          flipAll: true,
+          flipAllSeconds: 9,
+        ),
         Scene(
           id: 'b',
           kind: SceneKind.image,
@@ -123,5 +131,19 @@ void main() {
       isTrue,
       reason: 'the default show demos the clock',
     );
+  });
+
+  test('flip all sweeps across the sign, then flips back', () {
+    const s = Scene(id: 'a', flipAll: true, flipAllSeconds: 6);
+    // Nothing until the first interval has passed.
+    expect(s.flippedAt(3, 0, 10), isFalse);
+    expect(s.flippedAt(6.1, 0, 10), isTrue);
+    // The wave reaches the far edge later...
+    expect(s.flippedAt(6.1, 9, 10), isFalse);
+    expect(s.flippedAt(6.7, 9, 10), isTrue);
+    // ...and everything is back after the hold.
+    expect(s.flippedAt(8.5, 0, 10), isFalse);
+    expect(s.flippedAt(8.5, 9, 10), isFalse);
+    expect(s.copyWith(flipAll: false).flippedAt(6.1, 0, 10), isFalse);
   });
 }
