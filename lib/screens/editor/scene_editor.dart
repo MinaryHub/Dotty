@@ -382,18 +382,43 @@ class _SceneEditorState extends State<SceneEditor> {
         value: s.flipAll,
         onChanged: (v) => _update((s) => s.copyWith(flipAll: v)),
       ),
-      LabeledSlider(
-        label: context.tr('Flip every', '플립 간격'),
-        value: s.flipAllSeconds,
-        min: 3,
-        max: 30,
-        divisions: 27,
-        display: (v) => context.tr('${v.round()} s', '${v.round()}초'),
-        onChanged: s.flipAll
-            ? (v) =>
-                  _update((s) => s.copyWith(flipAllSeconds: v.roundToDouble()))
-            : null,
-      ),
+      if (s.flipAll) ...[
+        FieldLabel(context.tr('Flip period', '돌리는 주기')),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final seconds in const [1.0, 2.0, 3.0, 5.0, 10.0, 30.0, 60.0])
+              ChoiceChip(
+                label: Text(
+                  context.tr('${seconds.round()} s', '${seconds.round()}초'),
+                ),
+                selected: s.flipAllSeconds == seconds,
+                onSelected: (_) =>
+                    _update((s) => s.copyWith(flipAllSeconds: seconds)),
+              ),
+          ],
+        ),
+        LabeledSlider(
+          label: context.tr('Every', '주기'),
+          value: s.flipAllSeconds,
+          min: Scene.minFlipAllSeconds,
+          max: Scene.maxFlipAllSeconds,
+          divisions: (Scene.maxFlipAllSeconds - Scene.minFlipAllSeconds)
+              .round(),
+          display: (v) => context.tr('${v.round()} s', '${v.round()}초'),
+          onChanged: (v) =>
+              _update((s) => s.copyWith(flipAllSeconds: v.roundToDouble())),
+        ),
+        Hint(
+          context.tr(
+            'The sign flips over every ${s.flipAllSeconds.round()} s and '
+                'turns back ${s.flipAllHold.toStringAsFixed(1)} s later.',
+            '${s.flipAllSeconds.round()}초마다 전체가 뒤집히고 '
+                '${s.flipAllHold.toStringAsFixed(1)}초 뒤 돌아옵니다.',
+          ),
+        ),
+      ],
     ],
   ];
 

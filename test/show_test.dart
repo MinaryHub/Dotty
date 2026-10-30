@@ -146,4 +146,13 @@ void main() {
     expect(s.flippedAt(8.5, 9, 10), isFalse);
     expect(s.copyWith(flipAll: false).flippedAt(6.1, 0, 10), isFalse);
   });
+
+  test('a short flip period still turns back before the next flip', () {
+    const s = Scene(id: 'a', flipAll: true, flipAllSeconds: 1);
+    expect(s.flipAllSweep + s.flipAllHold, lessThan(1));
+    expect(s.flippedAt(1.05, 0, 10), isTrue);
+    expect(s.flippedAt(1.9, 0, 10), isFalse);
+    expect(s.flippedAt(1.9, 9, 10), isFalse);
+    expect(s.flippedAt(2.05, 0, 10), isTrue);
+  });
 }

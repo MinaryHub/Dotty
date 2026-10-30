@@ -234,9 +234,14 @@ class Scene {
   final bool flipAll;
   final double flipAllSeconds;
 
+  /// Shortest and longest [flipAllSeconds].
+  static const minFlipAllSeconds = 1.0, maxFlipAllSeconds = 60.0;
+
   /// How long the [flipAll] wave takes to cross the sign, and how long the
-  /// sign stays flipped.
-  static const flipAllSweep = 0.6, flipAllHold = 1.2;
+  /// sign stays flipped; both shrink for short periods so the sign is back
+  /// before the next flip.
+  double get flipAllSweep => math.min(0.6, flipAllSeconds * 0.3);
+  double get flipAllHold => math.min(1.2, flipAllSeconds * 0.35);
 
   /// Whether column [c] of [cols] shows flipped (inverted) [seconds] after
   /// this scene came up, for a still scene with [flipAll] on.
@@ -382,7 +387,7 @@ class Scene {
       flipAll: r.boolean('flipAll', d.flipAll),
       flipAllSeconds: r
           .number('flipAllSeconds', d.flipAllSeconds)
-          .clamp(3, 120),
+          .clamp(minFlipAllSeconds, maxFlipAllSeconds),
     );
   }
 }
