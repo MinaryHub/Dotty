@@ -74,7 +74,8 @@ Flutter로 만들어 하나의 코드로 **웹(Vercel) · Windows · macOS · Li
 
 ## 웹 배포 (Vercel) — apps.kimserv.com/dotty
 
-저장소의 `vercel.json`과 `scripts/vercel-build.sh`로 배포됩니다.
+저장소([MinaryHub/Dotty](https://github.com/MinaryHub/Dotty))의 `vercel.json`과 `scripts/vercel-build.sh`로
+배포됩니다. `main`에 합치면 Vercel이 자동으로 운영 배포합니다.
 
 - 빌드 스크립트가 Flutter SDK를 받아 `flutter build web --base-href /dotty/`로 빌드하고
   결과를 `build/site/dotty/`에 배치합니다. 사이트 루트(`/`)는 `/dotty/`로 이동합니다.
