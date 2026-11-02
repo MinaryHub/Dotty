@@ -63,8 +63,9 @@ class SceneStrip extends StatelessWidget {
     return ValueListenableBuilder(
       valueListenable: store,
       builder: (context, show, _) {
+        final narrow = MediaQuery.sizeOf(context).width < 600;
         return SizedBox(
-          height: 136,
+          height: narrow ? 112 : 136,
           child: Row(
             children: [
               Expanded(
@@ -83,6 +84,7 @@ class SceneStrip extends StatelessWidget {
                       key: ValueKey(scene.id),
                       index: i,
                       child: _SceneCard(
+                        compact: narrow,
                         index: i,
                         count: show.scenes.length,
                         scene: scene,
@@ -95,8 +97,25 @@ class SceneStrip extends StatelessWidget {
                             onSelect(store.duplicateScene(scene.id)),
                         onDelete: () {
                           final next = show.scenes[i == 0 ? 1 : i - 1].id;
+                          final wasSelected = scene.id == selectedId;
                           store.removeScene(scene.id);
-                          if (scene.id == selectedId) onSelect(next);
+                          if (wasSelected) onSelect(next);
+                          ScaffoldMessenger.of(context)
+                            ..hideCurrentSnackBar()
+                            ..showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  context.tr('Scene deleted', '장면을 삭제했습니다'),
+                                ),
+                                action: SnackBarAction(
+                                  label: context.tr('Undo', '되돌리기'),
+                                  onPressed: () {
+                                    store.insertScene(scene, i);
+                                    if (wasSelected) onSelect(scene.id);
+                                  },
+                                ),
+                              ),
+                            );
                         },
                       ),
                     );
@@ -105,27 +124,11 @@ class SceneStrip extends StatelessWidget {
               ),
               Padding(
                 padding: const EdgeInsets.only(right: 8),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _AddButton(
-                      icon: Icons.text_fields,
-                      label: context.tr('Add text', '문구 추가'),
-                      onPressed: () => _add(context, SceneKind.text),
-                    ),
-                    const SizedBox(height: 4),
-                    _AddButton(
-                      icon: Icons.add_photo_alternate_outlined,
-                      label: context.tr('Add image', '이미지 추가'),
-                      onPressed: () => _addImage(context),
-                    ),
-                    const SizedBox(height: 4),
-                    _AddButton(
-                      icon: Icons.schedule,
-                      label: context.tr('Add clock', '시계 추가'),
-                      onPressed: () => _add(context, SceneKind.clock),
-                    ),
-                  ],
+                child: _AddMenu(
+                  compact: narrow,
+                  onText: () => _add(context, SceneKind.text),
+                  onImage: () => _addImage(context),
+                  onClock: () => _add(context, SceneKind.clock),
                 ),
               ),
             ],
@@ -136,35 +139,57 @@ class SceneStrip extends StatelessWidget {
   }
 }
 
-class _AddButton extends StatelessWidget {
-  const _AddButton({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
+/// One button that offers the kinds of scene to add.
+class _AddMenu extends StatelessWidget {
+  const _AddMenu({
+    required this.compact,
+    required this.onText,
+    required this.onImage,
+    required this.onClock,
   });
 
-  final IconData icon;
-  final String label;
-  final VoidCallback onPressed;
+  final bool compact;
+  final VoidCallback onText;
+  final VoidCallback onImage;
+  final VoidCallback onClock;
 
   @override
   Widget build(BuildContext context) {
-    // Icon-only on phones to leave room for the scene cards.
-    if (MediaQuery.sizeOf(context).width < 600) {
-      return IconButton.outlined(
-        icon: Icon(icon),
-        tooltip: label,
-        onPressed: onPressed,
-      );
-    }
-    return OutlinedButton.icon(
-      icon: Icon(icon, size: 18),
-      label: Text(label),
-      style: OutlinedButton.styleFrom(
-        visualDensity: VisualDensity.compact,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-      ),
-      onPressed: onPressed,
+    return MenuAnchor(
+      menuChildren: [
+        MenuItemButton(
+          leadingIcon: const Icon(Icons.text_fields),
+          onPressed: onText,
+          child: Text(context.tr('Text', '문구')),
+        ),
+        MenuItemButton(
+          leadingIcon: const Icon(Icons.add_photo_alternate_outlined),
+          onPressed: onImage,
+          child: Text(context.tr('Image…', '이미지…')),
+        ),
+        MenuItemButton(
+          leadingIcon: const Icon(Icons.schedule),
+          onPressed: onClock,
+          child: Text(context.tr('Clock', '시계')),
+        ),
+      ],
+      builder: (context, controller, _) {
+        void toggle() =>
+            controller.isOpen ? controller.close() : controller.open();
+        final label = context.tr('Add scene', '장면 추가');
+        if (compact) {
+          return IconButton.filled(
+            icon: const Icon(Icons.add),
+            tooltip: label,
+            onPressed: toggle,
+          );
+        }
+        return FilledButton.icon(
+          icon: const Icon(Icons.add),
+          label: Text(label),
+          onPressed: toggle,
+        );
+      },
     );
   }
 }
@@ -173,6 +198,7 @@ enum _CardAction { left, right, duplicate, delete }
 
 class _SceneCard extends StatelessWidget {
   const _SceneCard({
+    required this.compact,
     required this.index,
     required this.count,
     required this.scene,
@@ -185,6 +211,7 @@ class _SceneCard extends StatelessWidget {
     required this.onDelete,
   });
 
+  final bool compact;
   final int index;
   final int count;
   final Scene scene;
@@ -229,17 +256,28 @@ class _SceneCard extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           child: SizedBox(
-            width: 150,
+            width: compact ? 124 : 150,
             child: Column(
               children: [
                 SizedBox(
-                  height: 50,
-                  child: IgnorePointer(
-                    child: DotMatrixDisplay(
-                      scene: thumb,
-                      panel: panel.copyWith(glow: false),
-                      paused: true,
-                    ),
+                  height: compact ? 40 : 50,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      IgnorePointer(
+                        child: DotMatrixDisplay(
+                          scene: thumb,
+                          panel: panel.copyWith(glow: false),
+                          paused: true,
+                        ),
+                      ),
+                      // What the scene does, at a glance.
+                      Positioned(
+                        right: 3,
+                        top: 3,
+                        child: _StatusIcons(scene: scene),
+                      ),
+                    ],
                   ),
                 ),
                 Expanded(
@@ -302,6 +340,49 @@ class _SceneCard extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Small icons for how a scene moves and which effects it uses.
+class _StatusIcons extends StatelessWidget {
+  const _StatusIcons({required this.scene});
+
+  final Scene scene;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = scene;
+    final icons = [
+      if (s.isStill)
+        (Icons.pause, context.tr('Still', '고정'))
+      else if (s.direction == MarqueeDirection.left)
+        (Icons.arrow_back, context.tr('Scrolls left', '왼쪽으로 흐름'))
+      else
+        (Icons.arrow_forward, context.tr('Scrolls right', '오른쪽으로 흐름')),
+      if (s.blink) (Icons.flash_on, context.tr('Blinks', '깜빡임')),
+      if (s.isStill && s.flipAll) (Icons.flip, context.tr('Flip all', '전체 플립')),
+      if (s.isStill && s.replay)
+        (Icons.replay, context.tr('Replays its entrance', '다시 나타나기')),
+    ];
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xB3000000),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final (icon, label) in icons)
+              Tooltip(
+                message: label,
+                child: Icon(icon, size: 12, color: Colors.white70),
+              ),
+          ],
         ),
       ),
     );

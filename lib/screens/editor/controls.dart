@@ -190,3 +190,115 @@ class ChoiceRow<T> extends StatelessWidget {
     );
   }
 }
+
+/// A titled group of settings that folds away, so a long editor reads as a
+/// short list of topics; while folded, [summary] tells what is set inside.
+///
+/// Which groups are open is remembered by [id] across editors, so moving
+/// to another scene keeps the same groups open.
+class SettingsGroup extends StatefulWidget {
+  const SettingsGroup({
+    super.key,
+    required this.id,
+    required this.icon,
+    required this.title,
+    required this.summary,
+    required this.children,
+    this.initiallyOpen = false,
+    this.trailing,
+  });
+
+  final String id;
+  final IconData icon;
+  final String title;
+  final String summary;
+  final List<Widget> children;
+  final bool initiallyOpen;
+
+  /// Shown next to the summary, e.g. a color dot.
+  final Widget? trailing;
+
+  static final _open = <String, bool>{};
+
+  @override
+  State<SettingsGroup> createState() => _SettingsGroupState();
+}
+
+class _SettingsGroupState extends State<SettingsGroup> {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final open = SettingsGroup._open[widget.id] ?? widget.initiallyOpen;
+    return Card(
+      margin: const EdgeInsets.only(top: 10),
+      color: theme.colorScheme.surfaceContainerLow,
+      clipBehavior: Clip.antiAlias,
+      child: Theme(
+        // No lines above and below an open group; the card frames it.
+        data: theme.copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          key: PageStorageKey('group-${widget.id}'),
+          initiallyExpanded: open,
+          onExpansionChanged: (v) => SettingsGroup._open[widget.id] = v,
+          leading: Icon(widget.icon),
+          title: Text(widget.title, style: theme.textTheme.titleMedium),
+          subtitle: Row(
+            children: [
+              if (widget.trailing != null) ...[
+                widget.trailing!,
+                const SizedBox(width: 6),
+              ],
+              Expanded(
+                child: Text(
+                  widget.summary,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+          children: widget.children,
+        ),
+      ),
+    );
+  }
+}
+
+/// A small filled circle in [color] (or a rainbow), for summaries.
+class ColorDot extends StatelessWidget {
+  const ColorDot({super.key, required this.color, this.rainbow = false});
+
+  final Color color;
+  final bool rainbow;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 12,
+      height: 12,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: rainbow ? null : color,
+        gradient: rainbow ? rainbowGradient : null,
+        border: Border.all(color: Colors.white24),
+      ),
+    );
+  }
+}
+
+const rainbowGradient = SweepGradient(
+  colors: [
+    Color(0xFFFF3B30),
+    Color(0xFFFFCC00),
+    Color(0xFF34C759),
+    Color(0xFF00E5FF),
+    Color(0xFF2F7BFF),
+    Color(0xFFB36BFF),
+    Color(0xFFFF3B30),
+  ],
+);
