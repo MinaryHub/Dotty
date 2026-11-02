@@ -159,7 +159,7 @@ class _SceneEditorState extends State<SceneEditor> {
               icon: Icons.auto_awesome_outlined,
               title: context.tr('Effects', '효과'),
               summary: _effectsSummary(s),
-              children: _effectFields(s),
+              children: _effectFields(s, show),
             ),
             SettingsGroup(
               id: 'change',
@@ -389,8 +389,20 @@ class _SceneEditorState extends State<SceneEditor> {
         scene: s,
         customOpen: _customColor,
         onColor: (c) => _update((s) => s.copyWith(dotColor: c, rainbow: false)),
-        onRainbow: () => _update((s) => s.copyWith(rainbow: true)),
-        onCustom: () => setState(() => _customColor = true),
+        // A preset or the rainbow closes the slider for a color of one's own.
+        onPreset: (c) {
+          setState(() => _customColor = false);
+          _update((s) => s.copyWith(dotColor: c, rainbow: false));
+        },
+        onRainbow: () {
+          setState(() => _customColor = false);
+          _update((s) => s.copyWith(rainbow: true));
+        },
+        onCustom: () {
+          setState(() => _customColor = true);
+          // Leave the rainbow so the slider has a color to turn.
+          _update((s) => s.copyWith(rainbow: false));
+        },
       ),
     ],
     if (s.kind != SceneKind.image)
@@ -462,7 +474,48 @@ class _SceneEditorState extends State<SceneEditor> {
       ),
   ];
 
-  List<Widget> _effectFields(Scene s) => [
+  /// Warns when a still scene moves on before its periodic effect comes,
+  /// in a show of several scenes.
+  Widget? _tooShortWarning(Scene s, Show show) {
+    if (show.scenes.length < 2 || !s.isStill) return null;
+    final shown = s.durationSeconds;
+    final late = [
+      if (s.flipAll && shown <= s.flipAllSeconds)
+        context.tr('Flip all', '전체 플립'),
+      if (s.replay && shown <= s.replaySeconds)
+        context.tr('Replay entrance', '다시 나타나기'),
+    ];
+    if (late.isEmpty) return null;
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.warning_amber, size: 18, color: theme.colorScheme.error),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              context.tr(
+                '${late.join(' and ')} won\'t show when playing all scenes: '
+                    'this scene moves on after ${_seconds(shown)}. Make '
+                    '"Show for" (Scene change) longer.',
+                '모든 장면을 재생할 때는 ${late.join(', ')}이(가) 보이지 않습니다. '
+                    '이 장면이 ${_seconds(shown)} 뒤에 넘어가기 때문입니다. '
+                    '장면 전환의 "표시 시간"을 더 길게 하세요.',
+              ),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _effectFields(Scene s, Show show) => [
+    ?_tooShortWarning(s, show),
     SwitchListTile(
       contentPadding: EdgeInsets.zero,
       title: Text(context.tr('Blink', '깜빡임')),
@@ -585,7 +638,6 @@ class _SceneEditorState extends State<SceneEditor> {
   ];
 
   List<Widget> _timingFields(Scene s, Show show) {
-    final scrolls = s.direction != MarqueeDirection.none;
     return [
       FieldLabel(context.tr('When to move on', '다음 장면으로 넘어가는 때')),
       ChoiceRow<DurationMode>(
@@ -628,7 +680,7 @@ class _SceneEditorState extends State<SceneEditor> {
           onChanged: (v) =>
               _update((s) => s.copyWith(durationSeconds: v.roundToDouble())),
         ),
-        if (s.durationMode == DurationMode.passes && !scrolls)
+        if (s.durationMode == DurationMode.passes && s.isStill)
           Hint(
             context.tr(
               'A still scene doesn\'t scroll, so it uses the time instead.',
@@ -684,6 +736,7 @@ class _ColorPicker extends StatelessWidget {
     required this.scene,
     required this.customOpen,
     required this.onColor,
+    required this.onPreset,
     required this.onRainbow,
     required this.onCustom,
   });
@@ -691,6 +744,7 @@ class _ColorPicker extends StatelessWidget {
   final Scene scene;
   final bool customOpen;
   final ValueChanged<Color> onColor;
+  final ValueChanged<Color> onPreset;
   final VoidCallback onRainbow;
   final VoidCallback onCustom;
 
@@ -741,7 +795,7 @@ class _ColorPicker extends StatelessWidget {
             for (final c in dotColors)
               circle(
                 selected: !s.rainbow && !custom && c == s.dotColor,
-                onTap: () => onColor(c),
+                onTap: () => onPreset(c),
                 tooltip:
                     '#${(c.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}',
                 color: c,

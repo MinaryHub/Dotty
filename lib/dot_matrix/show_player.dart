@@ -87,6 +87,9 @@ class _ShowPlayerState extends State<ShowPlayer>
   /// Seconds the shown scene has stood with no transition running; a still
   /// scene with [Scene.replay] comes in again when this reaches its period.
   double _settled = 0;
+
+  /// Seconds the current scene has been on the sign, replays included.
+  double _onScreen = 0;
   _PlayingScene? _outgoing;
   double _transition = 1;
 
@@ -115,6 +118,7 @@ class _ShowPlayerState extends State<ShowPlayer>
       _transition = 1;
       _elapsed = 0;
       _settled = 0;
+      _onScreen = 0;
     }
     if (_index >= _scenes.length) _index = 0;
   }
@@ -135,6 +139,7 @@ class _ShowPlayerState extends State<ShowPlayer>
     }
 
     if (_outgoing == null) _settled += dt;
+    _onScreen += dt;
 
     if (_advances) {
       _elapsed += dt;
@@ -166,6 +171,7 @@ class _ShowPlayerState extends State<ShowPlayer>
       _entries++;
       _elapsed = 0;
       _settled = 0;
+      _onScreen = 0;
       // A flip-dot board turns its own discs over to the next scene.
       final cut =
           _current.transition == SceneTransition.cut ||
@@ -191,7 +197,11 @@ class _ShowPlayerState extends State<ShowPlayer>
         soloIndex >= 0 ? -1 - _entries : _entries,
       );
       _entries++;
-      _settled = 0;
+      // On a flip board the replay runs on the board itself: count from
+      // when it has cleared and redrawn, as for an LED transition.
+      _settled = widget.show.panel.flipDots
+          ? -DotMatrixDisplay.replaySeconds(widget.show.panel)
+          : 0;
       final cut =
           scene.transition == SceneTransition.cut || widget.show.panel.flipDots;
       _outgoing = cut ? null : previous;
@@ -216,6 +226,7 @@ class _ShowPlayerState extends State<ShowPlayer>
       onPass: (n) => _onPass(p.scene, n),
       flip: flip,
       sound: widget.sound,
+      startedAgo: _onScreen,
     );
   }
 
