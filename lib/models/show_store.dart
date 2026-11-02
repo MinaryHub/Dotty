@@ -66,6 +66,13 @@ class ShowStore extends ValueNotifier<Show> {
     value = value.copyWith(scenes: scenes);
   }
 
+  /// Puts [scene] back at [index], e.g. to undo removing it.
+  void insertScene(Scene scene, int index) {
+    final scenes = [...value.scenes];
+    scenes.insert(index.clamp(0, scenes.length), scene);
+    value = value.copyWith(scenes: scenes);
+  }
+
   /// Returns the copy's id.
   String duplicateScene(String id) {
     final copy = value.scenes[value.indexOf(id)].copyWith(id: newSceneId());

@@ -56,6 +56,9 @@ class _SceneEditorState extends State<SceneEditor> {
   late final _text = TextEditingController(text: _scene?.text ?? '');
   bool _importing = false;
 
+  /// Whether the hue slider for a color of one's own is open.
+  bool _customColor = false;
+
   ShowStore get store => widget.store;
 
   Scene? get _scene {
@@ -94,43 +97,164 @@ class _SceneEditorState extends State<SceneEditor> {
       builder: (context, show, _) {
         final s = _scene;
         if (s == null) return const SizedBox.shrink();
+        final look = _lookFields(s);
         return ListView(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 32),
           children: [
-            SectionHeader(context.tr('Content', '내용')),
-            SegmentedButton<SceneKind>(
-              segments: [
-                ButtonSegment(
-                  value: SceneKind.text,
-                  icon: const Icon(Icons.text_fields),
-                  label: Text(context.tr('Text', '문구')),
+            SettingsGroup(
+              id: 'content',
+              icon: Icons.edit_outlined,
+              title: context.tr('Content', '내용'),
+              summary: _contentSummary(s),
+              initiallyOpen: true,
+              children: [
+                SegmentedButton<SceneKind>(
+                  segments: [
+                    ButtonSegment(
+                      value: SceneKind.text,
+                      icon: const Icon(Icons.text_fields),
+                      label: Text(context.tr('Text', '문구')),
+                    ),
+                    ButtonSegment(
+                      value: SceneKind.image,
+                      icon: const Icon(Icons.image_outlined),
+                      label: Text(context.tr('Image', '이미지')),
+                    ),
+                    ButtonSegment(
+                      value: SceneKind.clock,
+                      icon: const Icon(Icons.schedule),
+                      label: Text(context.tr('Clock', '시계')),
+                    ),
+                  ],
+                  selected: {s.kind},
+                  onSelectionChanged: (v) =>
+                      _update((s) => s.copyWith(kind: v.first)),
                 ),
-                ButtonSegment(
-                  value: SceneKind.image,
-                  icon: const Icon(Icons.image_outlined),
-                  label: Text(context.tr('Image', '이미지')),
-                ),
-                ButtonSegment(
-                  value: SceneKind.clock,
-                  icon: const Icon(Icons.schedule),
-                  label: Text(context.tr('Clock', '시계')),
-                ),
+                const SizedBox(height: 12),
+                if (s.kind == SceneKind.text) ..._textFields(s),
+                if (s.kind == SceneKind.image) ..._imageFields(s),
+                if (s.kind == SceneKind.clock) ..._clockFields(s),
               ],
-              selected: {s.kind},
-              onSelectionChanged: (v) =>
-                  _update((s) => s.copyWith(kind: v.first)),
             ),
-            const SizedBox(height: 12),
-            if (s.kind == SceneKind.text) ..._textFields(s),
-            if (s.kind == SceneKind.image) ..._imageFields(s),
-            if (s.kind == SceneKind.clock) ..._clockFields(s),
-            if (s.usesDotColor) ..._colorFields(s),
-            ..._motionFields(s),
-            ..._timingFields(s, show),
+            if (look.isNotEmpty)
+              SettingsGroup(
+                id: 'look',
+                icon: Icons.palette_outlined,
+                title: context.tr('Look', '모양'),
+                summary: _lookSummary(s),
+                trailing: s.usesDotColor
+                    ? ColorDot(color: s.dotColor, rainbow: s.rainbow)
+                    : null,
+                children: look,
+              ),
+            SettingsGroup(
+              id: 'motion',
+              icon: Icons.swap_horiz,
+              title: context.tr('Motion', '움직임'),
+              summary: _motionSummary(s),
+              children: _motionFields(s),
+            ),
+            SettingsGroup(
+              id: 'effects',
+              icon: Icons.auto_awesome_outlined,
+              title: context.tr('Effects', '효과'),
+              summary: _effectsSummary(s),
+              children: _effectFields(s),
+            ),
+            SettingsGroup(
+              id: 'change',
+              icon: Icons.skip_next_outlined,
+              title: context.tr('Scene change', '장면 전환'),
+              summary: _changeSummary(s),
+              children: _timingFields(s, show),
+            ),
           ],
         );
       },
     );
+  }
+
+  String _seconds(double v) => context.tr('${v.round()} s', '${v.round()}초');
+
+  String _transitionName(SceneTransition t) => switch (t) {
+    SceneTransition.cut => context.tr('Cut', '바로'),
+    SceneTransition.fade => context.tr('Fade', '페이드'),
+    SceneTransition.slideLeft => context.tr('Slide', '옆으로 밀기'),
+    SceneTransition.slideUp => context.tr('Slide up', '위로 밀기'),
+    SceneTransition.slideDiagLeft => context.tr('Diagonal ←', '사선 ←'),
+    SceneTransition.slideDiagRight => context.tr('Diagonal →', '사선 →'),
+    SceneTransition.flip => context.tr('Flip', '플립'),
+  };
+
+  String _speedName(double v) {
+    final dots = v.round();
+    final pace = dots < 12
+        ? context.tr('slow', '느리게')
+        : dots < 40
+        ? context.tr('normal', '보통')
+        : context.tr('fast', '빠르게');
+    return context.tr('$dots dots/s · $pace', '$dots칸/초 · $pace');
+  }
+
+  String _contentSummary(Scene s) => switch (s.kind) {
+    SceneKind.text =>
+      s.text.trim().isEmpty
+          ? context.tr('(no text)', '(문구 없음)')
+          : s.text.trim().replaceAll('\n', ' / '),
+    SceneKind.image =>
+      s.image == null
+          ? context.tr('Image (none chosen)', '이미지 (선택 안 함)')
+          : context.tr('Image', '이미지'),
+    SceneKind.clock => context.tr('Clock', '시계'),
+  };
+
+  String _lookSummary(Scene s) => [
+    if (s.rainbow) context.tr('Rainbow', '무지개'),
+    if (s.kind != SceneKind.image)
+      s.bold ? context.tr('Bold', '굵게') : context.tr('Regular', '보통 굵기'),
+    if (s.kind == SceneKind.text)
+      context.tr(
+        'size ${(s.textSize * 100).round()}%',
+        '크기 ${(s.textSize * 100).round()}%',
+      ),
+  ].join(' · ');
+
+  String _motionSummary(Scene s) => s.isStill
+      ? context.tr('Still, centered', '고정 (가운데)')
+      : '${s.direction == MarqueeDirection.left ? context.tr('Left', '왼쪽으로') : context.tr('Right', '오른쪽으로')} · ${_speedName(s.speed)}';
+
+  String _effectsSummary(Scene s) {
+    final on = [
+      if (s.blink)
+        context.tr(
+          'Blink ${s.blinkHz.toStringAsFixed(1)} Hz',
+          '깜빡임 ${s.blinkHz.toStringAsFixed(1)} Hz',
+        ),
+      if (s.isStill && s.flipAll)
+        context.tr(
+          'Flip all every ${_seconds(s.flipAllSeconds)}',
+          '전체 플립 ${_seconds(s.flipAllSeconds)}마다',
+        ),
+      if (s.isStill && s.replay)
+        context.tr(
+          'Replay after ${_seconds(s.replaySeconds)}',
+          '다시 나타나기 ${_seconds(s.replaySeconds)}',
+        ),
+    ];
+    return on.isEmpty ? context.tr('None', '없음') : on.join(' · ');
+  }
+
+  String _changeSummary(Scene s) {
+    final when = s.usesPasses
+        ? context.tr(
+            'after ${s.passes} scroll${s.passes == 1 ? '' : 's'}',
+            '${s.passes}번 흐른 뒤',
+          )
+        : context.tr(
+            'after ${_seconds(s.durationSeconds)}',
+            '${_seconds(s.durationSeconds)} 뒤',
+          );
+    return '${_transitionName(s.transition)} · $when';
   }
 
   List<Widget> _textFields(Scene s) => [
@@ -162,29 +286,6 @@ class _SceneEditorState extends State<SceneEditor> {
           ActionChip(label: Text(p), onPressed: () => _setText(p)),
       ],
     ),
-    SwitchListTile(
-      contentPadding: EdgeInsets.zero,
-      title: Text(context.tr('Bold', '굵은 글씨')),
-      value: s.bold,
-      onChanged: (v) => _update((s) => s.copyWith(bold: v)),
-    ),
-    LabeledSlider(
-      label: context.tr('Text size', '글자 크기'),
-      value: s.textSize,
-      min: 0.2,
-      max: 1,
-      divisions: 16,
-      display: (v) => '${(v * 100).round()}%',
-      onChanged: (v) => _update((s) => s.copyWith(textSize: v)),
-    ),
-    Hint(
-      context.tr(
-        'Share of the panel height the text uses, all lines together. '
-            'Several lines share the height, so each gets smaller.',
-        '패널 높이 중 글자가 차지하는 비율입니다 (모든 줄 합계). 여러 줄이면 '
-            '높이를 나눠 쓰므로 줄마다 작아집니다.',
-      ),
-    ),
   ];
 
   List<Widget> _clockFields(Scene s) => [
@@ -204,12 +305,6 @@ class _SceneEditorState extends State<SceneEditor> {
         'Shows this device\'s current time, updated as it changes. With flip dots only the discs of changed digits flip.',
         '이 기기의 현재 시간을 보여 줍니다. 시간이 바뀔 때마다 갱신되고, 플립 도트에서는 바뀐 숫자의 원판만 뒤집힙니다.',
       ),
-    ),
-    SwitchListTile(
-      contentPadding: EdgeInsets.zero,
-      title: Text(context.tr('Bold', '굵은 글씨')),
-      value: s.bold,
-      onChanged: (v) => _update((s) => s.copyWith(bold: v)),
     ),
   ];
 
@@ -256,8 +351,8 @@ class _SceneEditorState extends State<SceneEditor> {
       ),
       Hint(
         context.tr(
-          'PNG · JPG · GIF · WebP, turned into dots to fit the panel height.',
-          'PNG · JPG · GIF · WebP. 패널 높이에 맞춰 도트로 변환됩니다.',
+          'PNG · JPG · GIF · WebP, turned into dots to fit the sign height.',
+          'PNG · JPG · GIF · WebP. 전광판 높이에 맞춰 도트로 변환됩니다.',
         ),
       ),
       const SizedBox(height: 12),
@@ -275,7 +370,7 @@ class _SceneEditorState extends State<SceneEditor> {
         onSelected: (v) => _update((s) => s.copyWith(imageColorMode: v)),
       ),
       LabeledSlider(
-        label: context.tr('Threshold (dark parts off)', '밝기 기준 (어두운 부분 끄기)'),
+        label: context.tr('Hide dark parts', '어두운 부분 끄기'),
         value: s.imageThreshold,
         min: 0,
         max: 0.9,
@@ -285,37 +380,48 @@ class _SceneEditorState extends State<SceneEditor> {
     ];
   }
 
-  List<Widget> _colorFields(Scene s) => [
-    SectionHeader(context.tr('Dot color', '점 색상')),
-    ColorSwatches(
-      colors: dotColors,
-      selected: s.rainbow ? null : s.dotColor,
-      onSelected: (c) =>
-          _update((s) => s.copyWith(dotColor: c, rainbow: false)),
-    ),
-    LabeledSlider(
-      label: context.tr('Hue', '색조'),
-      value: HSVColor.fromColor(s.dotColor).hue,
-      min: 0,
-      max: 359,
-      display: (v) => '${v.round()}°',
-      onChanged: (v) => _update(
-        (s) => s.copyWith(
-          dotColor: HSVColor.fromAHSV(1, v, 0.85, 1).toColor(),
-          rainbow: false,
+  /// Color, weight and size of what is drawn; empty for an image in its
+  /// own colors.
+  List<Widget> _lookFields(Scene s) => [
+    if (s.usesDotColor) ...[
+      FieldLabel(context.tr('Dot color', '점 색상')),
+      _ColorPicker(
+        scene: s,
+        customOpen: _customColor,
+        onColor: (c) => _update((s) => s.copyWith(dotColor: c, rainbow: false)),
+        onRainbow: () => _update((s) => s.copyWith(rainbow: true)),
+        onCustom: () => setState(() => _customColor = true),
+      ),
+    ],
+    if (s.kind != SceneKind.image)
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: Text(context.tr('Bold', '굵은 글씨')),
+        value: s.bold,
+        onChanged: (v) => _update((s) => s.copyWith(bold: v)),
+      ),
+    if (s.kind == SceneKind.text) ...[
+      LabeledSlider(
+        label: context.tr('Text size', '글자 크기'),
+        value: s.textSize,
+        min: 0.2,
+        max: 1,
+        divisions: 16,
+        display: (v) => '${(v * 100).round()}%',
+        onChanged: (v) => _update((s) => s.copyWith(textSize: v)),
+      ),
+      Hint(
+        context.tr(
+          'Share of the sign\'s height the text uses, all lines together. '
+              'Several lines share the height, so each gets smaller.',
+          '전광판 높이 중 글자가 차지하는 비율입니다 (모든 줄 합계). 여러 줄이면 '
+              '높이를 나눠 쓰므로 줄마다 작아집니다.',
         ),
       ),
-    ),
-    SwitchListTile(
-      contentPadding: EdgeInsets.zero,
-      title: Text(context.tr('Rainbow', '무지개 효과')),
-      value: s.rainbow,
-      onChanged: (v) => _update((s) => s.copyWith(rainbow: v)),
-    ),
+    ],
   ];
 
   List<Widget> _motionFields(Scene s) => [
-    SectionHeader(context.tr('Motion', '움직임')),
     ChoiceRow<MarqueeDirection>(
       options: [
         (MarqueeDirection.left, Icons.arrow_back, context.tr('Left', '왼쪽으로')),
@@ -329,18 +435,17 @@ class _SceneEditorState extends State<SceneEditor> {
       selected: s.direction,
       onSelected: (v) => _update((s) => s.copyWith(direction: v)),
     ),
-    LabeledSlider(
-      label: context.tr('Speed', '속도'),
-      value: s.speed,
-      min: 0,
-      max: 120,
-      display: (v) => v.round() == 0
-          ? context.tr('0 (stopped)', '0 (멈춤)')
-          : context.tr('${v.round()} dots/s', '${v.round()} 칸/초'),
-      onChanged: s.direction == MarqueeDirection.none
-          ? null
-          : (v) => _update((s) => s.copyWith(speed: v.roundToDouble())),
-    ),
+    if (s.direction != MarqueeDirection.none)
+      LabeledSlider(
+        label: context.tr('Speed', '속도'),
+        value: s.speed,
+        min: 0,
+        max: 120,
+        display: (v) => v.round() == 0
+            ? context.tr('0 (stopped)', '0 (멈춤)')
+            : _speedName(v),
+        onChanged: (v) => _update((s) => s.copyWith(speed: v.roundToDouble())),
+      ),
     if (s.speed <= 0 && s.direction != MarqueeDirection.none)
       Hint(
         context.tr(
@@ -355,21 +460,32 @@ class _SceneEditorState extends State<SceneEditor> {
           '고정 장면은 속도를 쓰지 않고 가운데에 멈춰 있습니다. 화면보다 긴 글자는 화면에 맞게 줄어듭니다.',
         ),
       ),
+  ];
+
+  List<Widget> _effectFields(Scene s) => [
     SwitchListTile(
       contentPadding: EdgeInsets.zero,
       title: Text(context.tr('Blink', '깜빡임')),
       value: s.blink,
       onChanged: (v) => _update((s) => s.copyWith(blink: v)),
     ),
-    LabeledSlider(
-      label: context.tr('Blink rate', '깜빡임 속도'),
-      value: s.blinkHz,
-      min: 0.5,
-      max: 8,
-      display: (v) => '${v.toStringAsFixed(1)} Hz',
-      onChanged: s.blink ? (v) => _update((s) => s.copyWith(blinkHz: v)) : null,
-    ),
-    if (s.direction == MarqueeDirection.none || s.speed <= 0) ...[
+    if (s.blink)
+      LabeledSlider(
+        label: context.tr('Blink rate', '깜빡임 속도'),
+        value: s.blinkHz,
+        min: 0.5,
+        max: 8,
+        display: (v) => '${v.toStringAsFixed(1)} Hz',
+        onChanged: (v) => _update((s) => s.copyWith(blinkHz: v)),
+      ),
+    if (!s.isStill)
+      Hint(
+        context.tr(
+          'Flip all and Replay entrance are for still scenes (Motion: Still).',
+          '전체 플립과 다시 나타나기는 고정 장면에서 쓸 수 있습니다 (움직임: 고정).',
+        ),
+      ),
+    if (s.isStill) ...[
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: Text(context.tr('Flip all', '전체 플립')),
@@ -471,19 +587,18 @@ class _SceneEditorState extends State<SceneEditor> {
   List<Widget> _timingFields(Scene s, Show show) {
     final scrolls = s.direction != MarqueeDirection.none;
     return [
-      SectionHeader(context.tr('Scene change', '장면 전환')),
-      FieldLabel(context.tr('Move on to the next scene', '다음 장면으로 넘어가는 시점')),
+      FieldLabel(context.tr('When to move on', '다음 장면으로 넘어가는 때')),
       ChoiceRow<DurationMode>(
         options: [
           (
             DurationMode.passes,
             Icons.repeat,
-            context.tr('After scrolling', '스크롤 완료 후'),
+            context.tr('After it scrolls by', '다 흐르고 나서'),
           ),
           (
             DurationMode.seconds,
             Icons.timer_outlined,
-            context.tr('After a time', '시간 지정'),
+            context.tr('After a set time', '정한 시간 뒤'),
           ),
         ],
         selected: s.durationMode,
@@ -491,12 +606,15 @@ class _SceneEditorState extends State<SceneEditor> {
       ),
       if (s.usesPasses)
         LabeledSlider(
-          label: context.tr('Scroll passes', '스크롤 횟수'),
+          label: context.tr('Times to scroll by', '흐르는 횟수'),
           value: s.passes.toDouble(),
           min: 1,
           max: 10,
           divisions: 9,
-          display: (v) => context.tr('${v.round()}×', '${v.round()}회'),
+          display: (v) => context.tr(
+            '${v.round()} time${v.round() == 1 ? '' : 's'}',
+            '${v.round()}번',
+          ),
           onChanged: (v) => _update((s) => s.copyWith(passes: v.round())),
         )
       else ...[
@@ -513,8 +631,8 @@ class _SceneEditorState extends State<SceneEditor> {
         if (s.durationMode == DurationMode.passes && !scrolls)
           Hint(
             context.tr(
-              'A still scene uses the time instead of scroll passes.',
-              '고정된 장면은 스크롤 횟수 대신 표시 시간을 사용합니다.',
+              'A still scene doesn\'t scroll, so it uses the time instead.',
+              '고정 장면은 흐르지 않으므로 표시 시간을 사용합니다.',
             ),
           ),
       ],
@@ -557,5 +675,103 @@ class _SceneEditorState extends State<SceneEditor> {
           ),
         ),
     ];
+  }
+}
+
+/// Preset dot colors, a rainbow, and a color of one's own (a hue slider).
+class _ColorPicker extends StatelessWidget {
+  const _ColorPicker({
+    required this.scene,
+    required this.customOpen,
+    required this.onColor,
+    required this.onRainbow,
+    required this.onCustom,
+  });
+
+  final Scene scene;
+  final bool customOpen;
+  final ValueChanged<Color> onColor;
+  final VoidCallback onRainbow;
+  final VoidCallback onCustom;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = scene;
+    final preset = dotColors.contains(s.dotColor);
+    final custom = !s.rainbow && (!preset || customOpen);
+    final outline = Theme.of(context).colorScheme.primary;
+    Widget circle({
+      required bool selected,
+      required VoidCallback onTap,
+      required String tooltip,
+      Color? color,
+      Gradient? gradient,
+      Widget? child,
+    }) {
+      return Tooltip(
+        message: tooltip,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: color,
+              gradient: gradient,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: selected ? outline : Colors.white24,
+                width: selected ? 3 : 1,
+              ),
+            ),
+            child: child,
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final c in dotColors)
+              circle(
+                selected: !s.rainbow && !custom && c == s.dotColor,
+                onTap: () => onColor(c),
+                tooltip:
+                    '#${(c.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}',
+                color: c,
+              ),
+            circle(
+              selected: s.rainbow,
+              onTap: onRainbow,
+              tooltip: context.tr('Rainbow', '무지개'),
+              gradient: rainbowGradient,
+            ),
+            circle(
+              selected: custom,
+              onTap: onCustom,
+              tooltip: context.tr('Your own color', '직접 고르기'),
+              color: custom ? s.dotColor : null,
+              child: custom ? null : const Icon(Icons.tune, size: 18),
+            ),
+          ],
+        ),
+        if (custom)
+          LabeledSlider(
+            label: context.tr('Hue', '색조'),
+            value: HSVColor.fromColor(s.dotColor).hue,
+            min: 0,
+            max: 359,
+            display: (v) => '${v.round()}°',
+            onChanged: (v) =>
+                onColor(HSVColor.fromAHSV(1, v, 0.85, 1).toColor()),
+          ),
+      ],
+    );
   }
 }

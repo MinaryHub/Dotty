@@ -29,9 +29,17 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _playAll = false;
   int? _playingIndex;
 
+  /// The preview stands still (tap it, or the pause button).
+  bool _paused = false;
+
+  /// Bumped to play the preview again from the start.
+  int _restarts = 0;
+
   ShowStore get store => widget.store;
 
   void _select(String id) => setState(() => _selectedId = id);
+
+  void _togglePause() => setState(() => _paused = !_paused);
 
   void _openSign() {
     // Within the tap itself, so the browser allows going fullscreen.
@@ -74,18 +82,105 @@ class _HomeScreenState extends State<HomeScreen> {
                 clipBehavior: Clip.antiAlias,
                 margin: EdgeInsets.zero,
                 child: InkWell(
-                  onTap: _openSign,
-                  child: ShowPlayer(
-                    show: show,
-                    soloSceneId: _playAll ? null : _selectedId,
-                    onSceneChanged: (i) => setState(() => _playingIndex = i),
-                    sound: true,
+                  // Tapping the preview pauses it; fullscreen has its own
+                  // button, so a stray tap never leaves the editor.
+                  onTap: _togglePause,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      ShowPlayer(
+                        key: ValueKey(_restarts),
+                        show: show,
+                        paused: _paused,
+                        soloSceneId: _playAll ? null : _selectedId,
+                        onSceneChanged: (i) =>
+                            setState(() => _playingIndex = i),
+                        sound: true,
+                      ),
+                      if (_paused)
+                        const Center(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: Color(0x99000000),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Padding(
+                              padding: EdgeInsets.all(10),
+                              child: Icon(
+                                Icons.pause,
+                                size: 32,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ),
             ),
           );
         },
+      ),
+    );
+
+    final controls = Padding(
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 6,
+        runSpacing: 4,
+        children: [
+          IconButton.filledTonal(
+            icon: Icon(_paused ? Icons.play_arrow : Icons.pause),
+            tooltip: _paused
+                ? context.tr('Play', '재생')
+                : context.tr('Pause', '일시정지'),
+            onPressed: _togglePause,
+          ),
+          IconButton.filledTonal(
+            icon: const Icon(Icons.replay),
+            tooltip: context.tr('Play from the start', '처음부터 다시'),
+            onPressed: () => setState(() {
+              _restarts++;
+              _paused = false;
+              _playingIndex = _playAll ? 0 : null;
+            }),
+          ),
+          Tooltip(
+            message: _playAll
+                ? context.tr('Preview only the selected scene', '선택한 장면만 미리보기')
+                : context.tr('Preview all scenes in order', '모든 장면을 순서대로 미리보기'),
+            child: FilterChip(
+              avatar: const Icon(Icons.playlist_play, size: 18),
+              label: Text(context.tr('Play all', '연속 재생')),
+              selected: _playAll,
+              showCheckmark: false,
+              onSelected: (v) => setState(() {
+                _playAll = v;
+                _playingIndex = v ? 0 : null;
+                _restarts++;
+              }),
+            ),
+          ),
+          Tooltip(
+            message: _playAll
+                ? context.tr(
+                    'All scenes in order, fullscreen',
+                    '모든 장면을 순서대로 전체 화면으로',
+                  )
+                : context.tr(
+                    'Only the selected scene, fullscreen',
+                    '선택한 장면만 전체 화면으로',
+                  ),
+            child: FilledButton.icon(
+              icon: const Icon(Icons.fullscreen),
+              label: Text(context.tr('Fullscreen', '전체 화면')),
+              onPressed: _openSign,
+            ),
+          ),
+        ],
       ),
     );
 
@@ -102,8 +197,8 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           TabBar(
             tabs: [
-              Tab(text: context.tr('Selected scene', '선택한 장면')),
-              Tab(text: context.tr('Panel (all scenes)', '패널 (공통)')),
+              Tab(text: context.tr('This scene', '이 장면')),
+              Tab(text: context.tr('Sign (all scenes)', '전광판 (모든 장면)')),
             ],
           ),
           Expanded(
@@ -149,44 +244,7 @@ class _HomeScreenState extends State<HomeScreen> {
               label: Text(context.tr('한국어', 'English')),
               onPressed: LanguageScope.maybeOf(context)?.toggle,
             ),
-          const SizedBox(width: 4),
-          Tooltip(
-            message: _playAll
-                ? context.tr('Preview only the selected scene', '선택한 장면만 미리보기')
-                : context.tr('Preview all scenes in order', '모든 장면을 순서대로 미리보기'),
-            child: OutlinedButton.icon(
-              icon: Icon(_playAll ? Icons.stop : Icons.playlist_play),
-              label: Text(
-                _playAll
-                    ? context.tr('Stop play all', '연속 재생 끄기')
-                    : context.tr('Play all', '연속 재생'),
-              ),
-              onPressed: () => setState(() {
-                _playAll = !_playAll;
-                _playingIndex = _playAll ? 0 : null;
-              }),
-            ),
-          ),
           const SizedBox(width: 8),
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: Tooltip(
-              message: _playAll
-                  ? context.tr(
-                      'All scenes in order, fullscreen',
-                      '모든 장면을 순서대로 전체 화면으로',
-                    )
-                  : context.tr(
-                      'Only the selected scene, fullscreen',
-                      '선택한 장면만 전체 화면으로',
-                    ),
-              child: FilledButton.icon(
-                icon: const Icon(Icons.fullscreen),
-                label: Text(context.tr('Fullscreen', '전체 화면')),
-                onPressed: _openSign,
-              ),
-            ),
-          ),
         ],
       ),
       body: LayoutBuilder(
@@ -198,6 +256,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Column(
                     children: [
                       Expanded(child: preview),
+                      controls,
                       strip,
                       const SizedBox(height: 8),
                     ],
@@ -211,10 +270,11 @@ class _HomeScreenState extends State<HomeScreen> {
           return Column(
             children: [
               SizedBox(
-                height: (constraints.maxHeight * 0.3).clamp(120, 260),
+                height: (constraints.maxHeight * 0.26).clamp(110, 240),
                 width: double.infinity,
                 child: preview,
               ),
+              controls,
               strip,
               const Divider(height: 1),
               Expanded(child: editors),

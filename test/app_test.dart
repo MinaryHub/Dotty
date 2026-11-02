@@ -28,11 +28,51 @@ void main() {
 
     // Adding a scene inserts it after the selection and selects it.
     final count = store.value.scenes.length;
-    await tester.tap(find.text('Add text'));
+    await tester.tap(find.text('Add scene'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(MenuItemButton, 'Text'));
+    await tester.pump();
     await tester.pump();
     expect(store.value.scenes.length, count + 1);
     expect(store.value.scenes[1].text, 'New scene');
     expect(find.widgetWithText(TextField, 'New scene'), findsOneWidget);
+  });
+
+  testWidgets('tapping the preview pauses it; a deleted scene can come back', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final store = ShowStore.memory();
+    await tester.pumpWidget(
+      DottyApp(store: store, language: LanguageController()),
+    );
+    await tester.pump();
+
+    ShowPlayer player() => tester.widget(find.byType(ShowPlayer));
+    expect(player().paused, isFalse);
+    await tester.tap(find.byType(ShowPlayer));
+    await tester.pump();
+    expect(player().paused, isTrue);
+    // The pause button plays it again.
+    await tester.tap(find.byTooltip('Play'));
+    await tester.pump();
+    expect(player().paused, isFalse);
+
+    final before = [for (final s in store.value.scenes) s.id];
+    // The preview animates forever, so pump through menu animations.
+    await tester.tap(find.byTooltip('Scene menu').at(1));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('Delete'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(store.value.scenes.length, before.length - 1);
+    await tester.tap(find.text('Undo'));
+    await tester.pump();
+    expect([for (final s in store.value.scenes) s.id], before);
   });
 
   testWidgets('the interface switches between English and Korean', (
@@ -52,7 +92,7 @@ void main() {
     await tester.pump();
     expect(language.value, AppLanguage.ko);
     expect(find.text('전체 화면'), findsOneWidget);
-    expect(find.text('문구 추가'), findsOneWidget);
+    expect(find.text('장면 추가'), findsOneWidget);
     await tester.tap(find.text('English'));
     await tester.pump();
     expect(find.text('Fullscreen'), findsOneWidget);
