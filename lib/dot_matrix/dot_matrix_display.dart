@@ -28,6 +28,7 @@ class DotMatrixDisplay extends StatefulWidget {
     this.entry = 0,
     this.sound = false,
     this.columns,
+    this.startedAgo = 0,
   });
 
   final Scene scene;
@@ -51,6 +52,22 @@ class DotMatrixDisplay extends StatefulWidget {
   /// fit the available width.
   final int? columns;
 
+  /// Seconds [scene] had already been on the sign before this display came
+  /// up, as when a replay brings it in again: its [Scene.flipAll] clock
+  /// carries on instead of starting over.
+  final double startedAgo;
+
+  /// How long a flip board takes to clear itself for a replay.
+  static double clearSeconds(PanelSettings panel) =>
+      panel.transitionMs / 1000 * 1.2 + FlipBoard.flipSeconds + 0.35;
+
+  /// How long a flip-board replay takes, clearing and redrawing, until the
+  /// scene stands again.
+  static double replaySeconds(PanelSettings panel) =>
+      clearSeconds(panel) +
+      panel.transitionMs / 1000 * 1.2 +
+      math.max(FlipBoard.flipSeconds, panel.flipSeconds);
+
   @override
   State<DotMatrixDisplay> createState() => _DotMatrixDisplayState();
 }
@@ -69,7 +86,7 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
   int _passes = 0;
 
   /// [_seconds] when the shown scene came up.
-  double _shownAt = 0;
+  late double _shownAt = -widget.startedAgo;
 
   /// The scene whose content [_bitmap] holds. It lags [DotMatrixDisplay.scene]
   /// while a newly given scene is being rasterized, so the board keeps
@@ -196,12 +213,12 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
         // A different scene takes over: start it from the beginning.
         _scroll = 0;
         _passes = 0;
-        _shownAt = _seconds;
+        // The same scene again (a replay) keeps its flip-all clock.
+        if (s.id != _shown.id) _shownAt = _seconds;
         _pendingWave = s.transition;
         if (s.id == _shown.id && widget.panel.flipDots) {
           // Same scene again (a replay): clear the board, then redraw it.
-          final sweep = widget.panel.transitionMs / 1000 * 1.2;
-          _blankUntil = _seconds + sweep + FlipBoard.flipSeconds + 0.35;
+          _blankUntil = _seconds + DotMatrixDisplay.clearSeconds(widget.panel);
           _returnPending = true;
         }
       }
