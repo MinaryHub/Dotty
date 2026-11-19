@@ -224,11 +224,11 @@ class _SceneCard extends StatelessWidget {
   final VoidCallback onDelete;
 
   String _timing(BuildContext context) => scene.usesPasses
-      ? context.tr('Scroll ${scene.passes}×', '스크롤 ${scene.passes}회')
-      : context.tr(
-          '${scene.durationSeconds.round()} s',
-          '${scene.durationSeconds.round()}초',
-        );
+      ? context.tr(
+          '${scene.passes} scroll${scene.passes == 1 ? '' : 's'}',
+          '${scene.passes}번 흐름',
+        )
+      : formatDuration(context, scene.durationSeconds);
 
   @override
   Widget build(BuildContext context) {

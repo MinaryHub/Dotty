@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
+import '../l10n.dart';
 import '../models/show.dart';
 import '../sound/flip_sound.dart';
 import 'clock_font.dart';
@@ -137,6 +138,20 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
     _ticker.start();
   }
 
+  /// Whether the interface is in Korean: a 12-hour clock then says 오전/오후
+  /// rather than AM/PM.
+  bool _korean = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final korean = context.language == AppLanguage.ko;
+    if (korean != _korean) {
+      _korean = korean;
+      if (widget.scene.kind == SceneKind.clock) _rasterize();
+    }
+  }
+
   @override
   void didUpdateWidget(DotMatrixDisplay old) {
     super.didUpdateWidget(old);
@@ -182,6 +197,7 @@ class _DotMatrixDisplayState extends State<DotMatrixDisplay>
         maxWidth: widget.columns,
         bold: s.bold,
         colonOn: clockColonOn(time, s.clockFormat),
+        korean: _korean,
       );
     } else if (s.kind == SceneKind.image) {
       bitmap = image == null

@@ -51,3 +51,18 @@ extension Translate on BuildContext {
   /// [en] or [ko], whichever the interface is shown in.
   String tr(String en, String ko) => language == AppLanguage.ko ? ko : en;
 }
+
+/// [seconds] as people say it: "45 s", "2 min", "1 min 30 s". Fractions
+/// keep up to two decimals ("0.5 s") so short timings read exactly.
+String formatDuration(BuildContext context, double seconds) {
+  if (seconds < 10 && seconds != seconds.roundToDouble()) {
+    var text = seconds.toStringAsFixed(2);
+    text = text.replaceFirst(RegExp(r'0$'), '');
+    return context.tr('$text s', '$text초');
+  }
+  final whole = seconds.round();
+  if (whole < 60) return context.tr('$whole s', '$whole초');
+  final m = whole ~/ 60, s = whole % 60;
+  if (s == 0) return context.tr('$m min', '$m분');
+  return context.tr('$m min $s s', '$m분 $s초');
+}

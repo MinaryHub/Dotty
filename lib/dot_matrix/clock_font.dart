@@ -129,11 +129,17 @@ Future<DotBitmap> rasterizeClock(
   int? maxWidth,
   bool bold = true,
   bool colonOn = true,
+  bool korean = true,
 }) async {
-  final full = formatClock(time, format);
-  // The Hangul half-day label is drawn separately; the rest is digits.
-  final label = format == ClockFormat.hm12 ? full.split(' ').first : null;
-  final digits = label == null ? full : full.substring(label.length + 1);
+  final full = formatClock(time, format, korean: korean);
+  // The half-day label (오전/오후 before the time, AM/PM after it) is drawn
+  // separately; the rest is digits.
+  final parts = full.split(' ');
+  final labelFirst = korean;
+  final label = format == ClockFormat.hm12
+      ? (labelFirst ? parts.first : parts.last)
+      : null;
+  final digits = label == null ? full : (labelFirst ? parts.last : parts.first);
 
   final margin = rows >= 10 ? 1 : 0;
   var h = rows - 2 * margin;
@@ -163,17 +169,19 @@ Future<DotBitmap> rasterizeClock(
 
   final canvas = _Canvas(width, rows);
   final top = (rows - h) ~/ 2;
-  var x = 0;
   final lb = labelBitmap;
+  var x = lb != null && labelFirst ? lb.width + labelGap(metrics) : 0;
   if (lb != null) {
     // Sits on the digits' baseline, like a small unit label.
+    final left = labelFirst ? 0 : width - lb.width;
     final lt = top + h - lb.rows;
     for (var y = 0; y < lb.rows; y++) {
       for (var lx = 0; lx < lb.width; lx++) {
-        if (lb.isOn(lx, y)) canvas.fill(lx, lt + y, lx + 1, lt + y + 1);
+        if (lb.isOn(lx, y)) {
+          canvas.fill(left + lx, lt + y, left + lx + 1, lt + y + 1);
+        }
       }
     }
-    x = lb.width + labelGap(metrics);
   }
   for (var i = 0; i < digits.length; i++) {
     if (i > 0) x += metrics.gap;

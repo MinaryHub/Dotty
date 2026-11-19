@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -8,15 +9,10 @@ import '../../models/show_store.dart';
 import '../../platform/image_import.dart';
 import 'controls.dart';
 
-const _presets = [
-  'HELLO DOTTY',
-  '안녕하세요',
-  'OPEN',
-  'WELCOME',
-  '영업중',
-  '♥ I LOVE YOU ♥',
-  '12:34',
-];
+const _presets = ['HELLO DOTTY', 'OPEN', 'WELCOME', '♥ I LOVE YOU ♥', '12:34'];
+
+/// Extra ready-made texts offered in the Korean interface.
+const _koreanPresets = ['안녕하세요', '영업중'];
 
 /// Lets the user pick an image, reporting failures in a snack bar. Returns
 /// null if cancelled or failed.
@@ -174,7 +170,13 @@ class _SceneEditorState extends State<SceneEditor> {
     );
   }
 
-  String _seconds(double v) => context.tr('${v.round()} s', '${v.round()}초');
+  String _seconds(double v) => formatDuration(context, v);
+
+  /// A blink rate in plain words rather than hertz.
+  String _perSecond(double hz) {
+    final n = hz.toStringAsFixed(1).replaceFirst('.0', '');
+    return context.tr('$n× a second', '초당 $n번');
+  }
 
   String _transitionName(SceneTransition t) => switch (t) {
     SceneTransition.cut => context.tr('Cut', '바로'),
@@ -227,8 +229,8 @@ class _SceneEditorState extends State<SceneEditor> {
     final on = [
       if (s.blink)
         context.tr(
-          'Blink ${s.blinkHz.toStringAsFixed(1)} Hz',
-          '깜빡임 ${s.blinkHz.toStringAsFixed(1)} Hz',
+          'Blink ${_perSecond(s.blinkHz)}',
+          '깜빡임 ${_perSecond(s.blinkHz)}',
         ),
       if (s.isStill && s.flipAll)
         context.tr(
@@ -282,7 +284,10 @@ class _SceneEditorState extends State<SceneEditor> {
       spacing: 6,
       runSpacing: 6,
       children: [
-        for (final p in _presets)
+        for (final p in [
+          ..._presets,
+          if (context.language == AppLanguage.ko) ..._koreanPresets,
+        ])
           ActionChip(label: Text(p), onPressed: () => _setText(p)),
       ],
     ),
@@ -291,10 +296,14 @@ class _SceneEditorState extends State<SceneEditor> {
   List<Widget> _clockFields(Scene s) => [
     FieldLabel(context.tr('Format', '표시 형식')),
     ChoiceRow<ClockFormat>(
-      options: const [
+      options: [
         (ClockFormat.hm, Icons.schedule, '14:05'),
         (ClockFormat.hms, Icons.timer_outlined, '14:05:09'),
-        (ClockFormat.hm12, Icons.wb_sunny_outlined, '오후 2:05'),
+        (
+          ClockFormat.hm12,
+          Icons.wb_sunny_outlined,
+          context.tr('2:05 PM', '오후 2:05'),
+        ),
         (ClockFormat.dateHm, Icons.calendar_today, '10/24 14:05'),
       ],
       selected: s.clockFormat,
@@ -486,6 +495,15 @@ class _SceneEditorState extends State<SceneEditor> {
         context.tr('Replay entrance', '다시 나타나기'),
     ];
     if (late.isEmpty) return null;
+    // Long enough for the slowest of them to come once and finish.
+    final needed = math.max(
+      s.flipAll ? s.flipAllSeconds + s.flipAllSweep + s.flipAllHold : 0.0,
+      s.replay ? s.replaySeconds + 2 : 0.0,
+    );
+    final fix = DurationSlider.stops(
+      1,
+      600,
+    ).firstWhere((stop) => stop > needed, orElse: () => 600);
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(top: 8),
@@ -495,18 +513,35 @@ class _SceneEditorState extends State<SceneEditor> {
           Icon(Icons.warning_amber, size: 18, color: theme.colorScheme.error),
           const SizedBox(width: 6),
           Expanded(
-            child: Text(
-              context.tr(
-                '${late.join(' and ')} won\'t show when playing all scenes: '
-                    'this scene moves on after ${_seconds(shown)}. Make '
-                    '"Show for" (Scene change) longer.',
-                '모든 장면을 재생할 때는 ${late.join(', ')}이(가) 보이지 않습니다. '
-                    '이 장면이 ${_seconds(shown)} 뒤에 넘어가기 때문입니다. '
-                    '장면 전환의 "표시 시간"을 더 길게 하세요.',
-              ),
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.error,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context.tr(
+                    '${late.join(' and ')} won\'t show when playing all '
+                        'scenes: this scene moves on after ${_seconds(shown)}.',
+                    '모든 장면을 재생할 때는 이 장면이 ${_seconds(shown)} 뒤에 '
+                        '넘어가서 ${late.join(', ')} 효과가 보이지 않습니다.',
+                  ),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+                TextButton(
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  onPressed: () =>
+                      _update((s) => s.copyWith(durationSeconds: fix)),
+                  child: Text(
+                    context.tr(
+                      'Show this scene for ${_seconds(fix)}',
+                      '이 장면을 ${_seconds(fix)} 동안 표시',
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -528,7 +563,7 @@ class _SceneEditorState extends State<SceneEditor> {
         value: s.blinkHz,
         min: 0.5,
         max: 8,
-        display: (v) => '${v.toStringAsFixed(1)} Hz',
+        display: _perSecond,
         onChanged: (v) => _update((s) => s.copyWith(blinkHz: v)),
       ),
     if (!s.isStill)
@@ -552,39 +587,19 @@ class _SceneEditorState extends State<SceneEditor> {
         onChanged: (v) => _update((s) => s.copyWith(flipAll: v)),
       ),
       if (s.flipAll) ...[
-        FieldLabel(context.tr('Flip period', '돌리는 주기')),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: [
-            for (final seconds in const [1.0, 2.0, 3.0, 5.0, 10.0, 30.0, 60.0])
-              ChoiceChip(
-                label: Text(
-                  context.tr('${seconds.round()} s', '${seconds.round()}초'),
-                ),
-                selected: s.flipAllSeconds == seconds,
-                onSelected: (_) =>
-                    _update((s) => s.copyWith(flipAllSeconds: seconds)),
-              ),
-          ],
-        ),
-        LabeledSlider(
-          label: context.tr('Every', '주기'),
+        DurationSlider(
+          label: context.tr('Flip every', '돌리는 주기'),
           value: s.flipAllSeconds,
           min: Scene.minFlipAllSeconds,
           max: Scene.maxFlipAllSeconds,
-          divisions: (Scene.maxFlipAllSeconds - Scene.minFlipAllSeconds)
-              .round(),
-          display: (v) => context.tr('${v.round()} s', '${v.round()}초'),
-          onChanged: (v) =>
-              _update((s) => s.copyWith(flipAllSeconds: v.roundToDouble())),
+          onChanged: (v) => _update((s) => s.copyWith(flipAllSeconds: v)),
         ),
         Hint(
           context.tr(
-            'The sign flips over every ${s.flipAllSeconds.round()} s and '
-                'turns back ${s.flipAllHold.toStringAsFixed(1)} s later.',
-            '${s.flipAllSeconds.round()}초마다 전체가 뒤집히고 '
-                '${s.flipAllHold.toStringAsFixed(1)}초 뒤 돌아옵니다.',
+            'The sign flips over every ${_seconds(s.flipAllSeconds)} and '
+                'turns back ${_seconds(s.flipAllHold)} later.',
+            '${_seconds(s.flipAllSeconds)}마다 전체가 뒤집히고 '
+                '${_seconds(s.flipAllHold)} 뒤 돌아옵니다.',
           ),
         ),
       ],
@@ -601,36 +616,19 @@ class _SceneEditorState extends State<SceneEditor> {
         onChanged: (v) => _update((s) => s.copyWith(replay: v)),
       ),
       if (s.replay) ...[
-        FieldLabel(context.tr('Replay after', '다시 나타나는 시간')),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: [
-            for (final seconds in const [5.0, 10.0, 30.0, 60.0, 120.0, 300.0])
-              ChoiceChip(
-                label: Text(
-                  context.tr('${seconds.round()} s', '${seconds.round()}초'),
-                ),
-                selected: s.replaySeconds == seconds,
-                onSelected: (_) =>
-                    _update((s) => s.copyWith(replaySeconds: seconds)),
-              ),
-          ],
-        ),
-        LabeledSlider(
-          label: context.tr('After', '시간'),
+        DurationSlider(
+          label: context.tr('Replay after', '다시 나타나는 시간'),
           value: s.replaySeconds,
           min: Scene.minReplaySeconds,
           max: Scene.maxReplaySeconds,
-          divisions: (Scene.maxReplaySeconds - Scene.minReplaySeconds).round(),
-          display: (v) => context.tr('${v.round()} s', '${v.round()}초'),
-          onChanged: (v) =>
-              _update((s) => s.copyWith(replaySeconds: v.roundToDouble())),
+          onChanged: (v) => _update((s) => s.copyWith(replaySeconds: v)),
         ),
         Hint(
           context.tr(
-            'Counted from when the scene has settled. Pick the effect under "How this scene appears" below (Cut shows nothing on LEDs). If the scene leaves sooner than this, it never replays.',
-            '장면이 자리 잡은 뒤부터 셉니다. 아래 "이 장면이 나타나는 효과"에서 고른 효과로 나타납니다 (LED에서 "바로"는 눈에 띄지 않습니다). 장면이 이 시간보다 먼저 넘어가면 다시 나타나지 않습니다.',
+            'Counted from when the scene has settled. It comes in with the '
+                'effect chosen under Scene change (Cut shows nothing on LEDs).',
+            '장면이 자리 잡은 뒤부터 셉니다. 장면 전환에서 고른 효과로 나타납니다 '
+                '(LED에서 "바로"는 눈에 띄지 않습니다).',
           ),
         ),
       ],
@@ -670,15 +668,12 @@ class _SceneEditorState extends State<SceneEditor> {
           onChanged: (v) => _update((s) => s.copyWith(passes: v.round())),
         )
       else ...[
-        LabeledSlider(
+        DurationSlider(
           label: context.tr('Show for', '표시 시간'),
           value: s.durationSeconds,
           min: 1,
-          max: 60,
-          divisions: 59,
-          display: (v) => context.tr('${v.round()} s', '${v.round()}초'),
-          onChanged: (v) =>
-              _update((s) => s.copyWith(durationSeconds: v.roundToDouble())),
+          max: 600,
+          onChanged: (v) => _update((s) => s.copyWith(durationSeconds: v)),
         ),
         if (s.durationMode == DurationMode.passes && s.isStill)
           Hint(

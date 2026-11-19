@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n.dart';
+
 const dotColors = [
   Color(0xFFFF3B30),
   Color(0xFFFF9500),
@@ -302,3 +304,53 @@ const rainbowGradient = SweepGradient(
     Color(0xFFFF3B30),
   ],
 );
+
+/// A slider for a length of time in seconds. It moves in steps people
+/// actually pick (1, 2, 3 … 10, 15, 30, 60 …), so round values are easy to
+/// hit over a wide range; every time setting uses it.
+class DurationSlider extends StatelessWidget {
+  const DurationSlider({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.onChanged,
+  });
+
+  final String label;
+  final double value;
+  final double min;
+  final double max;
+  final ValueChanged<double>? onChanged;
+
+  static const _steps = <double>[
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 25, 30, 40, 50, 60, 90, 120, //
+    180, 240, 300, 450, 600,
+  ];
+
+  /// The step values within [min]..[max].
+  static List<double> stops(double min, double max) => [
+    for (final s in _steps)
+      if (s >= min && s <= max) s,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final stops = DurationSlider.stops(min, max);
+    // A saved value between two steps shows at the nearer one.
+    var index = 0;
+    for (var i = 1; i < stops.length; i++) {
+      if ((stops[i] - value).abs() < (stops[index] - value).abs()) index = i;
+    }
+    return LabeledSlider(
+      label: label,
+      value: index.toDouble(),
+      min: 0,
+      max: (stops.length - 1).toDouble(),
+      divisions: stops.length - 1,
+      display: (_) => formatDuration(context, value.clamp(min, max)),
+      onChanged: onChanged == null ? null : (i) => onChanged!(stops[i.round()]),
+    );
+  }
+}

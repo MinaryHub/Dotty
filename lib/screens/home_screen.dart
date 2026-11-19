@@ -148,21 +148,41 @@ class _HomeScreenState extends State<HomeScreen> {
               _playingIndex = _playAll ? 0 : null;
             }),
           ),
-          Tooltip(
-            message: _playAll
-                ? context.tr('Preview only the selected scene', '선택한 장면만 미리보기')
-                : context.tr('Preview all scenes in order', '모든 장면을 순서대로 미리보기'),
-            child: FilterChip(
-              avatar: const Icon(Icons.playlist_play, size: 18),
-              label: Text(context.tr('Play all', '연속 재생')),
-              selected: _playAll,
-              showCheckmark: false,
-              onSelected: (v) => setState(() {
-                _playAll = v;
-                _playingIndex = v ? 0 : null;
-                _restarts++;
-              }),
-            ),
+          ValueListenableBuilder(
+            valueListenable: store,
+            builder: (context, show, _) {
+              // Nothing to play in order with a single scene.
+              final single = show.scenes.length < 2 && !_playAll;
+              return Tooltip(
+                message: single
+                    ? context.tr(
+                        'Add another scene to play scenes in order',
+                        '장면을 하나 더 추가하면 순서대로 재생할 수 있습니다',
+                      )
+                    : _playAll
+                    ? context.tr(
+                        'Preview only the selected scene',
+                        '선택한 장면만 미리보기',
+                      )
+                    : context.tr(
+                        'Preview all scenes in order',
+                        '모든 장면을 순서대로 미리보기',
+                      ),
+                child: FilterChip(
+                  avatar: const Icon(Icons.playlist_play, size: 18),
+                  label: Text(context.tr('Play all', '연속 재생')),
+                  selected: _playAll,
+                  showCheckmark: false,
+                  onSelected: single
+                      ? null
+                      : (v) => setState(() {
+                          _playAll = v;
+                          _playingIndex = v ? 0 : null;
+                          _restarts++;
+                        }),
+                ),
+              );
+            },
           ),
           Tooltip(
             message: _playAll
