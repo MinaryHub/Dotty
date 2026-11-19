@@ -26,15 +26,23 @@ enum ClockFormat {
 }
 
 /// [time] as a clock scene shows it in [format].
-String formatClock(DateTime time, ClockFormat format) {
+///
+/// The half-day of [ClockFormat.hm12] reads 오전/오후 before the time when
+/// [korean], and AM/PM after it otherwise.
+String formatClock(DateTime time, ClockFormat format, {bool korean = true}) {
   String two(int v) => v.toString().padLeft(2, '0');
   final hm = '${two(time.hour)}:${two(time.minute)}';
   return switch (format) {
     ClockFormat.hm => hm,
     ClockFormat.hms => '$hm:${two(time.second)}',
-    ClockFormat.hm12 =>
-      '${time.hour < 12 ? '오전' : '오후'} '
-          '${time.hour % 12 == 0 ? 12 : time.hour % 12}:${two(time.minute)}',
+    ClockFormat.hm12 => () {
+      final digits =
+          '${time.hour % 12 == 0 ? 12 : time.hour % 12}:${two(time.minute)}';
+      final am = time.hour < 12;
+      return korean
+          ? '${am ? '오전' : '오후'} $digits'
+          : '$digits ${am ? 'AM' : 'PM'}';
+    }(),
     ClockFormat.dateHm => '${time.month}/${time.day} $hm',
   };
 }

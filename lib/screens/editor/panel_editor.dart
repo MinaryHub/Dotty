@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../../l10n.dart';
@@ -96,11 +98,17 @@ class _PanelEditorState extends State<PanelEditor> {
                     value: p.flipSeconds,
                     min: 0.08,
                     max: 1.0,
-                    display: (v) => context.tr(
-                      '${v.toStringAsFixed(2)} s',
-                      '${v.toStringAsFixed(2)}초',
-                    ),
+                    display: (v) => formatDuration(context, v),
                     onChanged: (v) => update((p) => p.copyWith(flipSeconds: v)),
+                  ),
+                  Hint(
+                    context.tr(
+                      'How long one disc takes to turn over. Fast scrolling '
+                          'and blinking shorten it automatically so text '
+                          'stays readable.',
+                      '원판 하나가 뒤집히는 데 걸리는 시간입니다. 빠르게 흐르는 글자나 '
+                          '깜빡임에서는 글자가 뭉개지지 않도록 자동으로 짧아집니다.',
+                    ),
                   ),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
@@ -121,12 +129,6 @@ class _PanelEditorState extends State<PanelEditor> {
                       FlipSound.instance.unlock();
                       update((p) => p.copyWith(flipUnchanged: v));
                     },
-                  ),
-                  Hint(
-                    context.tr(
-                      'How long one disc takes to flip and settle. Best seen when a still scene changes. For fast scrolling or blinking it is shortened automatically so text stays readable; lower the scroll speed (e.g. 5 dots/s) to watch the discs turn. How long the wave takes to cross the sign on a scene change is set by "Transition time" below.',
-                      '원판 하나가 뒤집혀 멈출 때까지의 시간입니다. 고정된 장면이 바뀔 때 가장 잘 보입니다. 빠르게 흐르는 글자나 깜빡임에서는 글자가 뭉개지지 않도록 자동으로 짧아지니, 뒤집히는 모습을 보려면 스크롤 속도를 낮추세요 (예: 5칸/초). 장면이 바뀔 때 물결이 화면을 지나가는 시간은 아래 "전환 효과 시간"으로 조절합니다.',
-                    ),
                   ),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
@@ -275,8 +277,8 @@ class _PanelEditorState extends State<PanelEditor> {
               icon: Icons.skip_next_outlined,
               title: context.tr('Scene changes', '장면 전환'),
               summary: context.tr(
-                'Transition time ${(p.transitionMs / 1000).toStringAsFixed(1)} s',
-                '전환 효과 시간 ${(p.transitionMs / 1000).toStringAsFixed(1)}초',
+                'Transition time ${formatDuration(context, p.transitionMs / 1000)}',
+                '전환 효과 시간 ${formatDuration(context, p.transitionMs / 1000)}',
               ),
               children: [
                 LabeledSlider(
@@ -285,16 +287,13 @@ class _PanelEditorState extends State<PanelEditor> {
                   min: 100,
                   max: 2000,
                   divisions: 19,
-                  display: (v) => context.tr(
-                    '${(v / 1000).toStringAsFixed(1)} s',
-                    '${(v / 1000).toStringAsFixed(1)}초',
-                  ),
+                  display: (v) => formatDuration(context, v / 1000),
                   onChanged: (v) => update((p) => p.copyWith(transitionMs: v)),
                 ),
                 Hint(
                   context.tr(
-                    'How long a scene change takes, for every scene. Each scene picks its own effect.',
-                    '모든 장면에 공통인 전환 시간입니다. 효과 종류는 장면마다 고릅니다.',
+                    'How long a scene change takes, for every scene (a Flip takes 2.5 times as long). Each scene picks its own effect.',
+                    '모든 장면에 공통인 전환 시간입니다 (플립은 2.5배 걸립니다). 효과 종류는 장면마다 고릅니다.',
                   ),
                 ),
               ],
@@ -303,7 +302,31 @@ class _PanelEditorState extends State<PanelEditor> {
             OutlinedButton.icon(
               icon: const Icon(Icons.restart_alt),
               label: Text(context.tr('Reset sign settings', '전광판 설정 초기화')),
-              onPressed: store.resetPanel,
+              // Nothing to reset when already at the defaults.
+              onPressed:
+                  jsonEncode(p.toJson()) ==
+                      jsonEncode(const PanelSettings().toJson())
+                  ? null
+                  : () {
+                      final before = p;
+                      store.resetPanel();
+                      ScaffoldMessenger.of(context)
+                        ..hideCurrentSnackBar()
+                        ..showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              context.tr(
+                                'Sign settings reset',
+                                '전광판 설정을 초기화했습니다',
+                              ),
+                            ),
+                            action: SnackBarAction(
+                              label: context.tr('Undo', '되돌리기'),
+                              onPressed: () => store.updatePanel((_) => before),
+                            ),
+                          ),
+                        );
+                    },
             ),
           ],
         );
