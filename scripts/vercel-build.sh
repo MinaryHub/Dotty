@@ -5,7 +5,7 @@ set -euo pipefail
 
 FLUTTER_VERSION="${FLUTTER_VERSION:-3.47.8}"
 FLUTTER_HOME="${FLUTTER_HOME:-$PWD/.flutter-sdk}"
-# URL path the app is served under (apps.kimserv.com/dotty/).
+# URL path the app is served under (dotty-liart.vercel.app/dotty/).
 BASE_PATH="${DOTTY_BASE_PATH:-/dotty/}"
 
 if ! command -v unzip >/dev/null 2>&1; then

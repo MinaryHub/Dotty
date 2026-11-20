@@ -89,7 +89,7 @@ Flutter로 만들어 하나의 코드로 **웹(Vercel) · Windows · macOS · Li
 - 화면 언어에 따라 12시간 시계가 `오후 2:05` / `2:05 PM`으로, 문구 예시도 언어에 맞게 바뀜
 - 폰에서는 장면 카드가 작아지고 추가 버튼이 + 하나로 줄어 편집 공간이 넓어짐
 
-## 웹 배포 (Vercel) — apps.kimserv.com/dotty
+## 웹 배포 (Vercel) — [dotty-liart.vercel.app](https://dotty-liart.vercel.app/)
 
 저장소([MinaryHub/Dotty](https://github.com/MinaryHub/Dotty))의 `vercel.json`과 `scripts/vercel-build.sh`로
 배포됩니다. `main`에 합치면 Vercel이 자동으로 운영 배포합니다.
@@ -99,12 +99,8 @@ Flutter로 만들어 하나의 코드로 **웹(Vercel) · Windows · macOS · Li
 - 다른 경로에 올리려면 Vercel 환경 변수 `DOTTY_BASE_PATH`(예: `/sign/`)를 설정하세요.
 - Flutter 버전은 환경 변수 `FLUTTER_VERSION`으로 바꿀 수 있습니다.
 
-**도메인 연결**: `apps.kimserv.com`을 Vercel 프로젝트 도메인으로 추가한 뒤, DNS(Google Cloud DNS)에
-다음 레코드를 추가하세요.
-
-| 이름 | 종류  | 값                      |
-|------|-------|-------------------------|
-| apps | CNAME | `cname.vercel-dns.com.` |
+**주소**: Vercel 기본 주소 `https://dotty-liart.vercel.app/`를 씁니다 (접속하면 `/dotty/`로 이동).
+별도 도메인을 쓰려면 Vercel 프로젝트의 Domains에 추가하고, 안내되는 DNS 레코드(CNAME `cname.vercel-dns.com.`)를 등록하세요.
 
 로컬에서 웹으로 실행하기:
 
